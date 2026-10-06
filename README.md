@@ -183,11 +183,16 @@ Sin esta clave, añadir canciones por enlace y la búsqueda devolverán un error
 4. Añade las variables de entorno en **Settings → Environment Variables**.
 5. Vercel ejecuta `npm install` (que dispara `prisma generate`) y `npm run build`.
 
-Aplica las migraciones en producción con:
+### Las migraciones se aplican solas al desplegar
 
-```bash
-npx prisma migrate deploy
-```
+`npm run build` delega en `scripts/build.mjs`, que en Vercel lanza
+`prisma migrate deploy` antes de compilar. Es a propósito: si se publica código
+que usa una columna nueva antes de aplicar la migración, Prisma lanza `P2022` y
+se cae **todo** lo que toque esa tabla, incluido el login.
+
+Si la migración falla, el despliegue se corta en vez de publicar código
+inc compatible con la base. En local no se migra en el build, para que no falle
+un `npm run build` con la base apagada; para eso está `npm run db:migrate`.
 
 Para crear el primer usuario en producción, define `SEED_USERNAME` y `SEED_PASSWORD` en Vercel y ejecuta `npm run db:seed` de forma local apuntando a la misma base de datos.
 
@@ -202,6 +207,7 @@ Para crear el primer usuario en producción, define `SEED_USERNAME` y `SEED_PASS
 | `npm run db:seed` | Crea el usuario inicial |
 | `npm run db:seed -- --force` | Crea el usuario o actualiza su contraseña y rol |
 | `npm run prisma:migrate` | Crea una migración en desarrollo |
+| `npm run db:migrate` | Aplica las migraciones pendientes (en local, a mano) |
 | `bash scripts/prod-bootstrap.sh <url> [usuario]` | Aplica migraciones y crea/actualiza un mod contra otra base |
 
 ### Preparar la base de producción

@@ -136,6 +136,77 @@
     font-family: var(--font-noto-serif-jp), serif;
   }
 
+  /* Barras del reproductor, con la pinta de las de YouTube: línea fina, se
+     engorda al pasar el ratón y el punto solo aparece entonces. */
+  .player-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .player-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    /* El relleno se pinta en divs de detrás; la pista queda transparente. */
+    background: transparent;
+    transition: height 0.15s ease;
+  }
+
+  .player-range:hover::-webkit-slider-runnable-track,
+  .player-range:focus-visible::-webkit-slider-runnable-track {
+    height: 6px;
+  }
+
+  .player-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    margin-top: -4.5px;
+    border-radius: 9999px;
+    background: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 80%);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .player-range:hover::-webkit-slider-thumb,
+  .player-range:focus-visible::-webkit-slider-thumb {
+    opacity: 1;
+  }
+
+  .player-range::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .player-range:hover::-moz-range-track {
+    height: 6px;
+  }
+
+  .player-range::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: none;
+    border-radius: 9999px;
+    background: var(--primary);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .player-range:hover::-moz-range-thumb,
+  .player-range:focus-visible::-moz-range-thumb {
+    opacity: 1;
+  }
+
+  .player-range:disabled {
+    cursor: not-allowed;
+  }
+
   .petal {
     border-radius: 100% 0 100% 0;
     will-change: transform, opacity;

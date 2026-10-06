@@ -33,13 +33,23 @@ export async function GET() {
 
   // El volumen guardado viaja en la misma respuesta para no añadir una
   // segunda llamada al abrir la página.
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
-    select: { volume: true },
-  })
+  //
+  // Va con red de seguridad: si la columna volume no está en la base (migración
+  // sin aplicar), el reproductor debe seguir dando la cola. Perder el volumen
+  // guardado no puede parar la música.
+  let savedVolume: number | null = null
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { volume: true },
+    })
+    savedVolume = user?.volume ?? null
+  } catch (error) {
+    console.error("No se pudo leer el volumen guardado:", error)
+  }
 
   if (!current) {
-    return NextResponse.json({ current: null, upNext: 0, savedVolume: user?.volume })
+    return NextResponse.json({ current: null, upNext: 0, savedVolume })
   }
 
   const upNext = await prisma.queueItem.count({
@@ -57,5 +67,5 @@ export async function GET() {
     upNext,
   }
 
-  return NextResponse.json({ current: payload, upNext, savedVolume: user?.volume })
+  return NextResponse.json({ current: payload, upNext, savedVolume })
 }

@@ -4,7 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CirclePlay, Home, Pause, Play, SkipForward, Volume2, VolumeX } from "lucide-react"
+import {
+  CirclePlay,
+  Headphones,
+  Home,
+  MonitorPlay,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatDuration } from "@/lib/format"
@@ -49,6 +60,22 @@ function loadYouTubeApi(): Promise<YTNamespace> {
   return apiPromise
 }
 
+/**
+ * Relleno de una barra, al estilo de YouTube: lo ya escuchado va en color
+ * fuerte y el resto en un tono apagado. Se pinta en un div detrás del input,
+ * porque la pista del range se deja transparente.
+ */
+function BarFill({ percent }: { percent: number }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted transition-all group-hover:h-1.5">
+      <div
+        className="absolute inset-y-0 left-0 rounded-full bg-primary"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  )
+}
+
 export function Player() {
   const router = useRouter()
   const [current, setCurrent] = useState<PlayerSong | null>(null)
@@ -56,7 +83,13 @@ export function Player() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(DEFAULT_VOLUME)
   const [needsGesture, setNeedsGesture] = useState(false)
-  const [position, setPosition] = useState({ current: 0, total: 0 })
+  const [showVideo, setShowVideo] = useState(false)
+  const [position, setPosition] = useState({ current: 0, total: 0, buffered: 0 })
+  // Fracción bajo el ratón en la barra de tiempo, para la vista previa
+  const [preview, setPreview] = useState<{ at: number; visible: boolean }>({
+    at: 0,
+    visible: false,
+  })
 
   const holderRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
@@ -68,20 +101,56 @@ export function Player() {
   const watchdogRef = useRef<number | null>(null)
   const scrubbingRef = useRef(false)
   const loadedVolumeRef = useRef(false)
+  // Evita repetir el mismo toast cada 5 segundos si el servidor sigue caído
+  const loadErrorShownRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
 
   const loadCurrent = useCallback(async () => {
     try {
       const res = await fetch("/api/player/current")
+
       if (res.status === 401) {
         router.replace("/login?callbackUrl=/player")
         return
       }
-      const data = await res.json()
-      setCurrent(data.current)
+
+      // En un error 500 Next puede devolver HTML en vez de JSON. Si se llama a
+      // res.json() a ciegas, eso lanza dentro del catch y el usuario solo ve
+      // "no se pudo consultar la cola", que no dice nada de qué ha fallado.
+      const raw = await res.text()
+      let data: {
+        current?: PlayerSong | null
+        upNext?: number
+        savedVolume?: number | null
+        error?: string
+      }
+      try {
+        data = raw ? JSON.parse(raw) : {}
+      } catch {
+        if (!loadErrorShownRef.current) {
+          loadErrorShownRef.current = true
+          toast.error(
+            `El servidor falló con un error ${res.status}. Revisa los registros de Vercel.`
+          )
+        }
+        setLoading(false)
+        return
+      }
+
+      if (!res.ok) {
+        if (!loadErrorShownRef.current) {
+          loadErrorShownRef.current = true
+          toast.error(data.error ?? `El servidor respondió con un error ${res.status}`)
+        }
+        setLoading(false)
+        return
+      }
+
+      loadErrorShownRef.current = false
+      setCurrent(data.current ?? null)
 
       // El volumen guardado solo se aplica la primera vez: si no, cada
-      // sondeo de 5 s volvería a imposing el valor viejo mientras el usuario
+      // sondeo de 5 s volvería a imponer el valor viejo mientras el usuario
       // está moviendo el deslizador.
       if (!loadedVolumeRef.current && typeof data.savedVolume === "number") {
         loadedVolumeRef.current = true
@@ -89,7 +158,10 @@ export function Player() {
         volumeRef.current = data.savedVolume
       }
     } catch {
-      toast.error("No se pudo consultar la cola")
+      if (!loadErrorShownRef.current) {
+        loadErrorShownRef.current = true
+        toast.error("No se pudo conectar con el servidor")
+      }
     } finally {
       setLoading(false)
     }
@@ -159,64 +231,68 @@ export function Player() {
   )
 
   /** Crea el reproductor para una canción. */
-  const buildPlayer = useCallback(async (song: PlayerSong) => {
-    const YT = await loadYouTubeApi()
-    if (!holderRef.current) return
+  const buildPlayer = useCallback(
+    async (song: PlayerSong) => {
+      const YT = await loadYouTubeApi()
+      if (!holderRef.current) return
 
-    ytRef.current = YT
-    clearWatchdog()
-    playerRef.current?.destroy()
-    if (holderRef.current) holderRef.current.innerHTML = ""
+      ytRef.current = YT
+      clearWatchdog()
+      playerRef.current?.destroy()
+      if (holderRef.current) holderRef.current.innerHTML = ""
 
-    const node = document.createElement("div")
-    holderRef.current.appendChild(node)
+      const node = document.createElement("div")
+      holderRef.current.appendChild(node)
 
-    setIsPlaying(false)
-    setNeedsGesture(false)
+      setIsPlaying(false)
+      setNeedsGesture(false)
+      setPosition({ current: 0, total: song.durationSec ?? 0, buffered: 0 })
 
-    playerRef.current = new YT.Player(node, {
-      videoId: song.youtubeId,
-      // El tamaño lo manda el contenedor, así el vídeo se adapta al ancho
-      // sin recalcular nada al cambiar de modo.
-      width: "100%",
-      height: "100%",
-      playerVars: {
-        autoplay: 1,
-        playsinline: 1,
-        controls: 0,
-        rel: 0,
-        start: 0,
-      },
-      events: {
-        onReady: (event: { target: YTEventTarget }) => {
-          // Los navegadores bloquean el autoplay con sonido si el visitante no
-          // ha interactuado antes. Se arranca silenciado, que sí está permitido,
-          // y el sonido se activa después cuando se confirme que está sonando.
-          event.target.mute()
-          event.target.setVolume(volumeRef.current)
-          event.target.playVideo()
-          startWatchdog(song.queueItemId)
+      playerRef.current = new YT.Player(node, {
+        videoId: song.youtubeId,
+        // El tamaño lo manda el contenedor, así el vídeo se adapta al ancho
+        // sin recalcular nada al cambiar de modo.
+        width: "100%",
+        height: "100%",
+        playerVars: {
+          autoplay: 1,
+          playsinline: 1,
+          controls: 0,
+          rel: 0,
+          start: 0,
         },
-        onStateChange: (event: { data: number }) => {
-          if (event.data === YT.PlayerState.PLAYING) {
+        events: {
+          onReady: (event: { target: YTEventTarget }) => {
+            // Los navegadores bloquean el autoplay con sonido si el visitante
+            // no ha interactuado antes. Se arranca silenciado, que sí está
+            // permitido, y el sonido se activa al confirmar que suena.
+            event.target.mute()
+            event.target.setVolume(volumeRef.current)
+            event.target.playVideo()
+            startWatchdog(song.queueItemId)
+          },
+          onStateChange: (event: { data: number }) => {
+            if (event.data === YT.PlayerState.PLAYING) {
+              clearWatchdog()
+              setIsPlaying(true)
+              setNeedsGesture(false)
+              // Solo si el volumen no está a 0: si el usuario lo silenció a
+              // propósito, no se le quita el silencio.
+              if (volumeRef.current > 0) playerRef.current?.unMute()
+            }
+            if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
+            if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
+          },
+          onError: () => {
             clearWatchdog()
-            setIsPlaying(true)
-            setNeedsGesture(false)
-            // Solo si el volumen no está a 0: si el usuario lo silenció a
-            // propósito, no se le quita el silencio.
-            if (volumeRef.current > 0) playerRef.current?.unMute()
-          }
-          if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
-          if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
+            setIsPlaying(false)
+            setNeedsGesture(true)
+          },
         },
-        onError: () => {
-          clearWatchdog()
-          setIsPlaying(false)
-          setNeedsGesture(true)
-        },
-      },
-    })
-  }, [clearWatchdog, startWatchdog])
+      })
+    },
+    [clearWatchdog, startWatchdog]
+  )
 
   useEffect(() => {
     advanceRef.current = advance
@@ -250,7 +326,7 @@ export function Player() {
 
   // Mantiene la cola al día. Sondea siempre, también con la pestaña oculta: si
   // no, una pestaña minimizada dejaría de reproducir y la cola no avanzaría.
-useEffect(() => {
+  useEffect(() => {
     const id = setInterval(() => void loadCurrent(), 5000)
 
     // Al volver al frente, se consulta de inmediato en lugar de esperar al
@@ -267,14 +343,18 @@ useEffect(() => {
   }, [loadCurrent])
 
   // Sigue la posición para mover la barra de avance. Mientras el usuario la
-  // arrastra no se toca, para que no salte bajo su dedo.
+  // está arrastrando no se toca, para que no salte bajo su dedo.
   useEffect(() => {
     const id = setInterval(() => {
       const player = playerRef.current
       if (!player || scrubbingRef.current) return
       const total = player.getDuration()
       if (!Number.isFinite(total) || total <= 0) return
-      setPosition({ current: player.getCurrentTime(), total })
+      setPosition({
+        current: player.getCurrentTime(),
+        total,
+        buffered: player.getVideoLoadedFraction(),
+      })
     }, 500)
 
     return () => clearInterval(id)
@@ -332,11 +412,7 @@ useEffect(() => {
     if (!Number.isFinite(total)) return
     const clamped = Math.max(0, Math.min(total, seconds))
     player.seekTo(clamped, true)
-    setPosition({ current: clamped, total })
-  }
-
-  function onScrubStart() {
-    scrubbingRef.current = true
+    setPosition((p) => ({ ...p, current: clamped }))
   }
 
   function onScrubEnd(seconds: number) {
@@ -344,8 +420,12 @@ useEffect(() => {
     seekTo(seconds)
   }
 
-  const isMuted = volume === 0
-  const [showVideo, setShowVideo] = useState(false)
+  /** Convierte la posición del ratón sobre la barra en una fracción 0-1. */
+  function fractionFromEvent(e: React.MouseEvent<HTMLDivElement>): number {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0) return 0
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  }
 
   if (loading) {
     return (
@@ -358,7 +438,7 @@ useEffect(() => {
   if (!current) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="max-w-md text-center border-2 border-border/60">
+        <Card className="max-w-md border-2 border-border/60 text-center">
           <CardContent className="space-y-2 py-10">
             <p className="font-heading text-lg">No hay música en la cola</p>
             <p className="text-sm text-muted-foreground">
@@ -370,8 +450,14 @@ useEffect(() => {
     )
   }
 
+  const hasDuration = position.total > 0
+  const playedPercent = hasDuration ? (position.current / position.total) * 100 : 0
+  const bufferedPercent = hasDuration ? position.buffered * 100 : 0
+  const previewPercent = preview.visible ? preview.at * 100 : 0
+  const isMuted = volume === 0
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 p-4">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-3 p-4">
       <div className="flex justify-center">
         <Link
           href="/"
@@ -382,116 +468,174 @@ useEffect(() => {
         </Link>
       </div>
 
-      <Card>
-        <CardContent className="space-y-5">
-          <div className="flex gap-4">
-            {current.thumbnail ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={current.thumbnail}
-                alt=""
-                className="h-24 w-40 shrink-0 rounded-lg object-cover"
-              />
-            ) : null}
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-lg font-semibold">{current.title}</p>
-              <p className="truncate text-sm text-muted-foreground">{current.channel}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {formatDuration(current.durationSec)}
-                {current.requesterName && ` · pedido por ${current.requesterName}`}
-              </p>
-            </div>
+      <Card className="gap-0 overflow-hidden border-2 border-border/60 py-0">
+        {/* Qué está sonando */}
+        <div className="flex items-center gap-4 p-4">
+          {current.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={current.thumbnail}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded-md object-cover shadow-sm"
+            />
+          ) : (
+            <div className="h-14 w-14 shrink-0 rounded-md bg-muted" />
+          )}
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-semibold">{current.title}</p>
+            <p className="truncate text-sm text-muted-foreground">{current.channel}</p>
           </div>
 
-          {/* Reproductor de YouTube oculto: el audio y el volumen los controlamos con la API */}
-          {/*
-            En modo audio el contenedor se esconde pero NO con display:none: un
-            iframe de tamaño cero puede dejar de reproducir. Se deja de 1x1 y
-            transparente, así el audio sigue sonando.
-          */}
-          <div
-            ref={holderRef}
-            aria-hidden={!showVideo}
-            className={
-              showVideo
-                ? "aspect-video w-full overflow-hidden rounded-lg bg-black"
-                : "pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0"
-            }
-          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setShowVideo((v) => !v)}
+            aria-pressed={showVideo}
+          >
+            {showVideo ? <Headphones /> : <MonitorPlay />}
+            <span className="hidden sm:inline">
+              {showVideo ? "Solo audio" : "Ver vídeo"}
+            </span>
+          </Button>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button
-              variant={showVideo ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowVideo((v) => !v)}
-            >
-              {showVideo ? "Solo audio" : "Mostrar vídeo"}
-            </Button>
-          </div>
+        {/* Vídeo. En modo audio no se oculta con display:none, que puede cortar
+            la reproducción: se deja de 1x1 y transparente. */}
+        <div
+          ref={holderRef}
+          aria-hidden={!showVideo}
+          className={
+            showVideo
+              ? "aspect-video w-full bg-black"
+              : "pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0"
+          }
+        />
 
-          {needsGesture && (
+        {needsGesture && (
+          <div className="px-4">
             <Button className="w-full" size="lg" onClick={togglePlay}>
               <CirclePlay />
               Activar reproducción
             </Button>
-          )}
-
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button size="lg" onClick={togglePlay} aria-label={isPlaying ? "Pausar" : "Reproducir"}>
-              {isPlaying ? <Pause /> : <Play />}
-              {isPlaying ? "Pausar" : "Reproducir"}
-            </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => void advance()}
-              aria-label="Saltar a la siguiente"
-            >
-              <SkipForward />
-              Saltar
-            </Button>
           </div>
+        )}
 
-          <div className="space-y-1.5">
+        {/* Barra de tiempo */}
+        <div className="px-4 pt-3">
+          <div
+            className="group relative"
+            onMouseMove={(e) =>
+              setPreview({ at: fractionFromEvent(e), visible: true })
+            }
+            onMouseLeave={() => setPreview((p) => ({ ...p, visible: false }))}
+          >
+            {/* Relleno detrás de la pista: búfer y parte escuchada */}
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted transition-all group-hover:h-1.5">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-foreground/20"
+                style={{ width: `${bufferedPercent}%` }}
+              />
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                style={{ width: `${playedPercent}%` }}
+              />
+            </div>
             <input
               type="range"
+              className="player-range relative"
               min={0}
               max={Math.max(1, Math.round(position.total))}
               step={1}
               value={Math.round(position.current)}
-              onChange={(e) => setPosition((p) => ({ ...p, current: Number(e.target.value) }))}
-              onPointerDown={onScrubStart}
-              onPointerUp={(e) => onScrubEnd(Number(e.currentTarget.value))}
-              onKeyUp={(e) => {
-                // El teclado no dispara pointerup: hay que cerrar el arrastre
-                // a mano o la barra se queda congelada.
-                if (e.currentTarget.value !== undefined) onScrubEnd(Number(e.currentTarget.value))
+              disabled={!hasDuration}
+              onChange={(e) =>
+                setPosition((p) => ({ ...p, current: Number(e.target.value) }))
+              }
+              onPointerDown={() => {
+                scrubbingRef.current = true
               }}
+              onPointerUp={(e) => onScrubEnd(Number(e.currentTarget.value))}
+              // El teclado no dispara pointerup: hay que cerrar el arrastre a
+              // mano o la barra se queda congelada.
+              onKeyUp={(e) => onScrubEnd(Number(e.currentTarget.value))}
               onBlur={(e) => onScrubEnd(Number(e.currentTarget.value))}
-              disabled={position.total <= 0}
               aria-label="Posición de la canción"
-              aria-valuetext={`${formatDuration(Math.round(position.current))} de ${formatDuration(Math.round(position.total))}`}
-              className="h-2 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+              aria-valuetext={`${formatDuration(Math.round(position.current))} de ${formatDuration(
+                hasDuration ? Math.round(position.total) : null
+              )}`}
             />
-            <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
-              <span>{formatDuration(Math.round(position.current))}</span>
-              <span>
-                {formatDuration(position.total > 0 ? Math.round(position.total) : null)}
+            {preview.visible && hasDuration && (
+              <span
+                className="pointer-events-none absolute -top-6 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-xs tabular-nums text-background"
+                style={{ left: `${previewPercent}%` }}
+              >
+                {formatDuration(Math.round(preview.at * position.total))}
               </span>
-            </div>
+            )}
           </div>
 
-          <div className="flex items-end justify-center gap-3 pt-2">
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              onClick={() => changeVolume(isMuted ? DEFAULT_VOLUME : 0)}
-              aria-label={isMuted ? "Activar sonido" : "Silenciar"}
-            >
-              {isMuted ? <VolumeX /> : <Volume2 />}
-            </Button>
+          <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+            <span>{formatDuration(Math.round(position.current))}</span>
+            <span>
+              {formatDuration(hasDuration ? Math.round(position.total) : null)}
+            </span>
+          </div>
+        </div>
+
+        {/* Controles, a la izquierda como en YouTube, volumen a la derecha */}
+        <div className="flex items-center gap-1 p-4">
+          <Button
+            size="icon-lg"
+            onClick={togglePlay}
+            aria-label={isPlaying ? "Pausar" : "Reproducir"}
+            className="rounded-full transition-transform hover:scale-105 active:scale-95"
+          >
+            {isPlaying ? (
+              <Pause className="fill-current" />
+            ) : (
+              <Play className="translate-x-px fill-current" />
+            )}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            onClick={() => void advance()}
+            aria-label="Saltar a la siguiente"
+          >
+            <SkipForward className="fill-current" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            onClick={() => seekTo(position.current - 10)}
+            aria-label="Retroceder 10 segundos"
+            title="Retroceder 10 segundos"
+            disabled={!hasDuration}
+          >
+            <RotateCcw />
+            <span className="absolute -mt-0.5 text-[9px] font-semibold">10</span>
+          </Button>
+
+          <div className="flex-1" />
+
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            onClick={() => changeVolume(isMuted ? DEFAULT_VOLUME : 0)}
+            aria-label={isMuted ? "Activar sonido" : "Silenciar"}
+          >
+            {isMuted ? <VolumeX /> : <Volume2 />}
+          </Button>
+
+          <div className="group relative w-24">
+            <BarFill percent={volume} />
             <input
               type="range"
+              className="player-range"
               min={0}
               max={100}
               step={1}
@@ -499,21 +643,24 @@ useEffect(() => {
               onChange={(e) => changeVolume(Number(e.target.value))}
               aria-label="Volumen"
               aria-valuetext={`${volume}%`}
-              // writing-mode gira el deslizador: max arriba, min abajo
-              style={{ writingMode: "vertical-lr", direction: "rtl" }}
-              className="h-28 w-2 cursor-pointer accent-primary"
             />
-            <span className="w-10 shrink-0 pb-1 text-right text-sm tabular-nums text-muted-foreground">
-              {volume}%
-            </span>
           </div>
+          <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+            {volume}%
+          </span>
+        </div>
 
-          <p className="text-center text-xs text-muted-foreground">
-            {current.upNext > 0
-              ? `${current.upNext} canción${current.upNext > 1 ? "es" : ""} siguiente${current.upNext > 1 ? "s" : ""} en la cola`
+        <p className="pb-4 text-center text-xs text-muted-foreground">
+          {current.requesterName
+            ? `Pedido por ${current.requesterName} · ${
+                current.upNext > 0
+                  ? `${current.upNext} más en la cola`
+                  : "última de la cola"
+              }`
+            : current.upNext > 0
+              ? `${current.upNext} canción${current.upNext > 1 ? "es" : ""} más en la cola`
               : "No hay más canciones en la cola"}
-          </p>
-        </CardContent>
+        </p>
       </Card>
     </div>
   )
