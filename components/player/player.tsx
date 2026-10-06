@@ -67,6 +67,8 @@ export function Player() {
   const ytRef = useRef<YTNamespace | null>(null)
   const watchdogRef = useRef<number | null>(null)
   const scrubbingRef = useRef(false)
+  const loadedVolumeRef = useRef(false)
+  const saveTimerRef = useRef<number | null>(null)
 
   const loadCurrent = useCallback(async () => {
     try {
@@ -77,6 +79,15 @@ export function Player() {
       }
       const data = await res.json()
       setCurrent(data.current)
+
+      // El volumen guardado solo se aplica la primera vez: si no, cada
+      // sondeo de 5 s volvería a imposing el valor viejo mientras el usuario
+      // está moviendo el deslizador.
+      if (!loadedVolumeRef.current && typeof data.savedVolume === "number") {
+        loadedVolumeRef.current = true
+        setVolume(data.savedVolume)
+        volumeRef.current = data.savedVolume
+      }
     } catch {
       toast.error("No se pudo consultar la cola")
     } finally {
@@ -215,6 +226,9 @@ export function Player() {
   useEffect(() => {
     return () => {
       if (watchdogRef.current !== null) window.clearInterval(watchdogRef.current)
+      // El temporizador de guardar el volumen no se cancela a propósito: si el
+      // usuario cambia el volumen y cierra la página enseguida, así el
+      // último ajuste llega a guardarse igual.
       playerRef.current?.destroy()
     }
   }, [])
@@ -278,10 +292,27 @@ useEffect(() => {
     }
   }
 
+  /** Guarda el volumen en la base, esperando a que el usuario pare. */
+  function saveVolume(value: number) {
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      void fetch("/api/player/volume", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ volume: value }),
+      }).catch(() => {
+        // Si no se guarda, no merece la pena molestar al usuario: el
+        // volumen de esta sesión sigue siendo el que ha elegido.
+      })
+    }, 800)
+  }
+
   function changeVolume(next: number) {
     const value = Math.max(0, Math.min(100, next))
     setVolume(value)
     volumeRef.current = value
+    saveVolume(value)
 
     const player = playerRef.current
     if (!player) return

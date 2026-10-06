@@ -31,8 +31,15 @@ export async function GET() {
     orderBy: { position: "asc" },
   })
 
+  // El volumen guardado viaja en la misma respuesta para no añadir una
+  // segunda llamada al abrir la página.
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: { volume: true },
+  })
+
   if (!current) {
-    return NextResponse.json({ current: null, upNext: 0 })
+    return NextResponse.json({ current: null, upNext: 0, savedVolume: user?.volume })
   }
 
   const upNext = await prisma.queueItem.count({
@@ -50,5 +57,5 @@ export async function GET() {
     upNext,
   }
 
-  return NextResponse.json({ current: payload, upNext })
+  return NextResponse.json({ current: payload, upNext, savedVolume: user?.volume })
 }

@@ -13,6 +13,7 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 - Reañadir canciones desde el historial, o vaciarlo entero de una vez
 - Tres roles: `admin`, `mod` y `streamer`
 - Gestión de usuarios desde `/users`: crear, renombrar, cambiar contraseña, rol y eliminar
+- El volumen con el que escucha cada usuario se guarda en su cuenta y se recupera al entrar
 - Sincronización entre pestañas (sondeo cada 5 s + al recuperar el foco)
 - Acceso restringido por usuario y contraseña (sesión con cookie `httpOnly` firmada)
 - Reproductor en `/player` para el streamer, con la canción actual, control de volumen y avance automático al terminar
@@ -70,7 +71,15 @@ un botón para saltar a la siguiente y un deslizador de volumen. Cuando la canci
 termina, se marca como reproducida y carga la siguiente sola.
 
 El volumen va de 0 a 100, con un deslizador vertical y el porcentaje al lado. El valor se
-conserva al cambiar de canción.
+conserva al cambiar de canción y **se guarda en la cuenta del usuario**, así que no hay que
+volver a ajustarlo en cada visita. Los 80 % son solo el valor para quien aún no ha elegido
+ninguno.
+
+Para tocarlo a mano:
+
+```bash
+npx prisma studio   # campo "volume" de la tabla User
+```
 
 La barra de tiempo va de 0 a la duración y se arrastra para saltar al punto que elijas,
 con el tiempo actual y el total a cada lado.
@@ -191,7 +200,7 @@ Para crear el primer usuario en producción, define `SEED_USERNAME` y `SEED_PASS
 | `npm run lint` | ESLint |
 | `npx prisma studio` | Interfaz visual de la base de datos |
 | `npm run db:seed` | Crea el usuario inicial |
-| `npm run db:seed -- --force` | Crea el usuario o actualiza su contraseña |
+| `npm run db:seed -- --force` | Crea el usuario o actualiza su contraseña y rol |
 | `npm run prisma:migrate` | Crea una migración en desarrollo |
 | `bash scripts/prod-bootstrap.sh <url> [usuario]` | Aplica migraciones y crea/actualiza un mod contra otra base |
 
