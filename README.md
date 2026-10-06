@@ -13,10 +13,45 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 - Reañadir canciones desde el historial
 - Sincronización entre pestañas (sondeo cada 5 s + al recuperar el foco)
 - Acceso restringido por usuario y contraseña (sesión con cookie `httpOnly` firmada)
+- Reproductor en `/player` para el streamer, con la canción actual, play/pausa, saltar ±10 s y avance automático al terminar
+
+## Reproductor
+
+`/player` es la vista que usa el streamer. Está pensada para dejarla abierta mientras
+reproduce, y también funciona como *Browser Source* de OBS.
+
+| Ruta | Para qué |
+| --- | --- |
+| `/player?key=TU_PLAYER_KEY` | La vista del reproductor |
+
+No pide sesión de moderador, porque el streamer la deja abierta. A cambio, las acciones
+que alteran la cola exigen `PLAYER_KEY`, para que la URL por sí sola no sirva de nada:
+
+```bash
+# genera la clave
+openssl rand -hex 16
+```
+
+Defínela como variable de entorno en Vercel y en tu `.env` local.
+
+### Sobre el audio
+
+El reproductor arranca la canción silenciada y acto seguido activa el volumen, porque
+los navegadores bloquean la reproducción automática con sonido si el visitante no ha
+interactuado antes. Si el navegador lo impide, aparece un botón **Activar reproducción**
+para que pulses una vez.
+
+Para que el audio llegue al directo, la música tiene que pasar por la captura de
+escritorio de OBS. Si quieres evitar arrastrar el resto del sonido del navegador al
+micro, conviene una tarjeta de audio virtual.
+
+Ten en cuenta también las reglas de YouTube sobre retransmisión de contenido con
+derechos de autor: una cuenta con earnización puede recibir un strike o una
+suspensión por retransmitir su música.
 
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Prisma · PostgreSQL (Vercel Postgres) · jose (JWT) · bcryptjs · dnd-kit · next-themes
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Prisma · PostgreSQL (Vercel Postgres) · jose (JWT) · bcryptjs · dnd-kit · next-themes · YouTube IFrame Player API
 
 ## Puesta en marcha
 
@@ -60,6 +95,7 @@ Abre `http://localhost:3000` e inicia sesión con el usuario creado en el seed.
 | `POSTGRES_URL_NON_POOLING` | URL de conexión directa, usada por Prisma Migrate |
 | `AUTH_SECRET` | Clave para firmar la sesión. Genera con `openssl rand -base64 32` |
 | `YOUTUBE_API_KEY` | Clave de la YouTube Data API v3 (necesaria para buscar y resolver vídeos) |
+| `PLAYER_KEY` | Clave del reproductor público. Genera con `openssl rand -hex 16` |
 | `SEED_USERNAME` | Usuario inicial que crea `npm run db:seed` |
 | `SEED_PASSWORD` | Contraseña del usuario inicial |
 

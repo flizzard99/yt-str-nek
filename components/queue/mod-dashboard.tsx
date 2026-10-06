@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ListMusic, Loader2, LogOut, Play, SkipForward } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ListMusic, Loader2, LogOut, Play, SkipForward, Radio } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { YoutubeSearch } from "@/components/search/youtube-search"
 import { AddByUrlForm } from "@/components/search/add-by-url-form"
@@ -43,6 +43,15 @@ export function ModDashboard({ username }: { username: string }) {
             <span className="text-xs text-muted-foreground">· {username}</span>
           </div>
           <div className="flex items-center gap-1">
+            <a
+              href="/player"
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              <Radio />
+              <span className="hidden sm:inline">Reproductor</span>
+            </a>
             <ThemeToggle />
             <Button
               variant="ghost"
