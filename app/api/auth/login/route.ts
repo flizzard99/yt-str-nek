@@ -30,7 +30,10 @@ export async function POST(req: Request) {
 
     await createSession(user)
     return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: "Error al iniciar sesión" }, { status: 500 })
+  } catch (err) {
+    console.error("[login] error:", err)
+    const message =
+      err instanceof Error ? err.message : "Error al iniciar sesión"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
