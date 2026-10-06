@@ -1,35 +1,19 @@
 import { cookies } from "next/headers"
-import { SignJWT, jwtVerify } from "jose"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  signSessionToken,
+  verifySessionToken,
+  type SessionUser,
+} from "@/lib/session"
 
-export const SESSION_COOKIE = "ytstrnek.session"
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7 // 7 días
-
-export interface SessionUser {
-  id: string
-  username: string
-  role: string
-}
-
-function getSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET
-  if (!secret) {
-    throw new Error("AUTH_SECRET no está configurada")
-  }
-  return new TextEncoder().encode(secret)
-}
+export { SESSION_COOKIE, verifySessionToken }
+export type { SessionUser }
 
 export async function createSession(user: SessionUser): Promise<void> {
-  const token = await new SignJWT({
-    id: user.id,
-    username: user.username,
-    role: user.role,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(`${SESSION_MAX_AGE}s`)
-    .sign(getSecret())
+  const token = await signSessionToken(user)
 
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, token, {
@@ -44,22 +28,6 @@ export async function createSession(user: SessionUser): Promise<void> {
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies()
   cookieStore.delete(SESSION_COOKIE)
-}
-
-/** Verifica un token JWT y devuelve la sesión, o null si es inválido. */
-export async function verifySessionToken(token: string | undefined): Promise<SessionUser | null> {
-  if (!token) return null
-
-  try {
-    const { payload } = await jwtVerify(token, getSecret())
-    return {
-      id: payload.id as string,
-      username: payload.username as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
 }
 
 export async function getSession(): Promise<SessionUser | null> {

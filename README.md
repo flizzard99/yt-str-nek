@@ -13,26 +13,31 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 - Reañadir canciones desde el historial
 - Sincronización entre pestañas (sondeo cada 5 s + al recuperar el foco)
 - Acceso restringido por usuario y contraseña (sesión con cookie `httpOnly` firmada)
-- Reproductor en `/player` para el streamer, con la canción actual, play/pausa, saltar ±10 s y avance automático al terminar
+- Reproductor en `/player` para el streamer, con la canción actual, control de volumen y avance automático al terminar
 
-## Reproductor
-
-`/player` es la vista que usa el streamer. Está pensada para dejarla abierta mientras
-reproduce, y también funciona como *Browser Source* de OBS.
+## Páginas
 
 | Ruta | Para qué |
 | --- | --- |
-| `/player?key=TU_PLAYER_KEY` | La vista del reproductor |
+| `/` | Portada: elige modo moderador o modo streamer |
+| `/login` | Inicio de sesión |
+| `/mod` | Panel de moderadores: cola, búsqueda, historial |
+| `/player` | Reproductor del streamer |
 
-No pide sesión de moderador, porque el streamer la deja abierta. A cambio, las acciones
-que alteran la cola exigen `PLAYER_KEY`, para que la URL por sí sola no sirva de nada:
+`/mod` y `/player` exigen sesión. Si entras sin ella, el login te devuelve a la página
+que intentabas abrir.
 
-```bash
-# genera la clave
-openssl rand -hex 16
-```
+## Reproductor
 
-Defínela como variable de entorno en Vercel y en tu `.env` local.
+`/player` muestra la canción actual con portada, canal y quién la pidió. Tiene play/pausa,
+un botón para saltar a la siguiente y un deslizador de volumen. Cuando la canción
+termina, se marca como reproducida y carga la siguiente sola.
+
+El volumen va de 0 a 100 y el valor se conserva al cambiar de canción.
+
+Cada entrada de la cola se identifica por su propio id, no por el vídeo. Así, si la misma
+canción está en la cola dos veces, al terminar la primera se pasa a la segunda en lugar de
+volver a empezar el vídeo.
 
 ### Sobre el audio
 
@@ -45,8 +50,12 @@ Para que el audio llegue al directo, la música tiene que pasar por la captura d
 escritorio de OBS. Si quieres evitar arrastrar el resto del sonido del navegador al
 micro, conviene una tarjeta de audio virtual.
 
+Como la página requiere sesión, si la quieres usar como *Browser Source* de OBS tendrás
+que iniciar sesión dentro de la fuente. La alternativa es abrirla en un navegador normal
+en una segunda pantalla, que es lo habitual.
+
 Ten en cuenta también las reglas de YouTube sobre retransmisión de contenido con
-derechos de autor: una cuenta con earnización puede recibir un strike o una
+derechos de autor: una cuenta con monetización puede recibir un strike o una
 suspensión por retransmitir su música.
 
 ## Stack
@@ -95,7 +104,6 @@ Abre `http://localhost:3000` e inicia sesión con el usuario creado en el seed.
 | `POSTGRES_URL_NON_POOLING` | URL de conexión directa, usada por Prisma Migrate |
 | `AUTH_SECRET` | Clave para firmar la sesión. Genera con `openssl rand -base64 32` |
 | `YOUTUBE_API_KEY` | Clave de la YouTube Data API v3 (necesaria para buscar y resolver vídeos) |
-| `PLAYER_KEY` | Clave del reproductor público. Genera con `openssl rand -hex 16` |
 | `SEED_USERNAME` | Usuario inicial que crea `npm run db:seed` |
 | `SEED_PASSWORD` | Contraseña del usuario inicial |
 

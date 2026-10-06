@@ -1,13 +1,14 @@
+import { redirect } from "next/navigation"
+import { getSession } from "@/lib/auth"
 import { Player } from "@/components/player/player"
 
-// La página se lee desde OBS en cada cambio de cola, así que nunca se cachea.
-export const dynamic = "force-dynamic"
+export const metadata = {
+  title: "Reproductor · yt-str-nek",
+}
 
-export default async function PlayerPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ key?: string }>
-}) {
-  const { key } = await searchParams
-  return <Player playerKey={key ?? ""} />
+export default async function PlayerPage() {
+  const session = await getSession()
+  if (!session) redirect("/login?callbackUrl=/player")
+
+  return <Player />
 }

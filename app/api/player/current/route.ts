@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
+import { getSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { verifyPlayerKey } from "@/lib/player"
 
 export interface PlayerSong {
   queueItemId: string
@@ -17,25 +17,27 @@ export interface PlayerSong {
  * Estado del reproductor: la canción actual y cuántas van detrás.
  * No expone el resto de la cola.
  */
-export async function GET(req: Request) {
-  if (!verifyPlayerKey(req)) {
-    return NextResponse.json({ error: "Clave inválida" }, { status: 401 })
-  }
+export async function GET() {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  const items = await prisma.queueItem.findMany({
+  // Solo se trae la primera: el resto se cuenta aparte para no enviar más
+  // datos de la cola de los necesarios.
+  const current = await prisma.queueItem.findFirst({
     include: {
       song: true,
       addedBy: { select: { username: true } },
     },
     orderBy: { position: "asc" },
-    take: 2,
   })
-
-  const [current, ...rest] = items
 
   if (!current) {
     return NextResponse.json({ current: null, upNext: 0 })
   }
+
+  const upNext = await prisma.queueItem.count({
+    where: { position: { gt: current.position } },
+  })
 
   const payload: PlayerSong = {
     queueItemId: current.id,
@@ -45,8 +47,8 @@ export async function GET(req: Request) {
     thumbnail: current.song.thumbnail,
     durationSec: current.song.durationSec,
     requesterName: current.requesterName,
-    upNext: rest.length,
+    upNext,
   }
 
-  return NextResponse.json({ current: payload, upNext: rest.length })
+  return NextResponse.json({ current: payload, upNext })
 }

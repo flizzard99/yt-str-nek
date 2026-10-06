@@ -2,15 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import {
-  CirclePlay,
-  Pause,
-  Play,
-  SkipForward,
-  Volume2,
-  VolumeX,
-  SkipBack,
-} from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { CirclePlay, Home, Pause, Play, SkipForward, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatDuration } from "@/lib/format"
@@ -25,6 +19,7 @@ declare global {
 }
 
 const API_SRC = "https://www.youtube.com/iframe_api"
+const DEFAULT_VOLUME = 80
 
 let apiPromise: Promise<YTNamespace> | null = null
 
@@ -42,8 +37,7 @@ function loadYouTubeApi(): Promise<YTNamespace> {
       if (window.YT?.Player) resolve(window.YT)
     }
 
-    const existing = document.querySelector(`script[src="${API_SRC}"]`)
-    if (existing) return
+    if (document.querySelector(`script[src="${API_SRC}"]`)) return
 
     const script = document.createElement("script")
     script.src = API_SRC
@@ -55,32 +49,26 @@ function loadYouTubeApi(): Promise<YTNamespace> {
   return apiPromise
 }
 
-export function Player({ playerKey }: { playerKey: string }) {
+export function Player() {
+  const router = useRouter()
   const [current, setCurrent] = useState<PlayerSong | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(DEFAULT_VOLUME)
   const [needsGesture, setNeedsGesture] = useState(false)
 
   const holderRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
-  const currentIdRef = useRef<string | null>(null)
-  // Permite que los callbacks del player disparen advance() sin depender del orden
+  // Identidad por item de cola: dos entradas con el mismo vídeo son distintas
+  const loadedIdRef = useRef<string | null>(null)
+  const volumeRef = useRef(DEFAULT_VOLUME)
   const advanceRef = useRef<(() => Promise<void>) | null>(null)
-
-  const authedFetch = useCallback(
-    (url: string, init?: RequestInit) => {
-      const separator = url.includes("?") ? "&" : "?"
-      return fetch(`${url}${separator}key=${encodeURIComponent(playerKey)}`, init)
-    },
-    [playerKey]
-  )
 
   const loadCurrent = useCallback(async () => {
     try {
-      const res = await authedFetch("/api/player/current")
+      const res = await fetch("/api/player/current")
       if (res.status === 401) {
-        toast.error("Clave del reproductor inválida")
+        router.replace("/login?callbackUrl=/player")
         return
       }
       const data = await res.json()
@@ -90,80 +78,73 @@ export function Player({ playerKey }: { playerKey: string }) {
     } finally {
       setLoading(false)
     }
-  }, [authedFetch])
-
-  /** Crea el reproductor cuando llega la primera canción. */
-  const buildPlayer = useCallback(
-    async (youtubeId: string, startMuted: boolean) => {
-      const YT = await loadYouTubeApi()
-      if (!holderRef.current) return
-
-      playerRef.current?.destroy()
-
-      const node = document.createElement("div")
-      node.id = `yt-${Math.random().toString(36).slice(2)}`
-      holderRef.current.appendChild(node)
-
-      playerRef.current = new YT.Player(node, {
-        videoId: youtubeId,
-        playerVars: {
-          autoplay: 1,
-          playsinline: 1,
-          controls: 1,
-          rel: 0,
-          modestbranding: 1,
-        },
-        events: {
-          onReady: (event: { target: YTEventTarget }) => {
-            // El navegador solo permite reproducción automática con sonido si
-            // hubo interacción previa. Se arranca silenciado y luego se
-            // activa el volumen; si lo bloquea, se pide un clic.
-            try {
-              event.target.mute()
-              event.target.playVideo()
-              if (!startMuted) event.target.unMute()
-              setIsPlaying(true)
-            } catch {
-              setNeedsGesture(true)
-            }
-          },
-          onStateChange: (event: { data: number }) => {
-            if (event.data === YT.PlayerState.PLAYING) setIsPlaying(true)
-            if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
-            if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
-          },
-        },
-      })
-    },
-     
-    []
-  )
+  }, [router])
 
   const advance = useCallback(async () => {
-    const finishedId = currentIdRef.current
+    const finishedId = loadedIdRef.current
+    if (!finishedId) return
+
     try {
-      const res = await authedFetch("/api/player/next", {
+      const res = await fetch("/api/player/next", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ queueItemId: finishedId }),
       })
-      if (!res.ok && res.status !== 409) {
-        toast.error("No se pudo avanzar la cola")
-      }
+
+      // Si el servidor no confirmó el avance no se toca el reproductor: si no,
+      // se recargaría la misma canción y el bucle no terminaría nunca.
+      if (!res.ok) return
+
+      await loadCurrent()
     } catch {
       toast.error("No se pudo avanzar la cola")
-    } finally {
-      // Fuerza la recarga para cargar la siguiente canción
-      currentIdRef.current = null
-      playerRef.current?.destroy()
-      playerRef.current = null
-      if (holderRef.current) holderRef.current.innerHTML = ""
-      setCurrent(null)
-      await loadCurrent()
     }
-  }, [authedFetch, loadCurrent])
+  }, [loadCurrent])
 
-  // Registra advance para los callbacks del player
+  /** Crea el reproductor para una canción. */
+  const buildPlayer = useCallback(async (song: PlayerSong) => {
+    const YT = await loadYouTubeApi()
+    if (!holderRef.current) return
+
+    playerRef.current?.destroy()
+    if (holderRef.current) holderRef.current.innerHTML = ""
+
+    const node = document.createElement("div")
+    holderRef.current.appendChild(node)
+
+    playerRef.current = new YT.Player(node, {
+      videoId: song.youtubeId,
+      playerVars: {
+        autoplay: 1,
+        playsinline: 1,
+        controls: 0,
+        rel: 0,
+        start: 0,
+      },
+      events: {
+        onReady: (event: { target: YTEventTarget }) => {
+          // Los navegadores bloquean el autoplay con sonido sin interacción
+          // previa, así que se arranca silenciado y seActiva el volumen después.
+          try {
+            event.target.mute()
+            event.target.setVolume(volumeRef.current)
+            event.target.playVideo()
+            event.target.unMute()
+            setIsPlaying(true)
+            setNeedsGesture(false)
+          } catch {
+            setNeedsGesture(true)
+          }
+        },
+        onStateChange: (event: { data: number }) => {
+          if (event.data === YT.PlayerState.PLAYING) setIsPlaying(true)
+          if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
+          if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
+        },
+      },
+    })
+  }, [])
+
   useEffect(() => {
     advanceRef.current = advance
   }, [advance])
@@ -175,11 +156,12 @@ export function Player({ playerKey }: { playerKey: string }) {
     void loadCurrent()
   }, [loadCurrent])
 
-  // Cuando llega una canción nueva, se monta el reproductor
+  // Monta el reproductor solo cuando cambia el item de la cola
   useEffect(() => {
-    if (!current || currentIdRef.current === current.youtubeId) return
-    currentIdRef.current = current.youtubeId
-    void buildPlayer(current.youtubeId, false)
+    if (!current) return
+    if (loadedIdRef.current === current.queueItemId) return
+    loadedIdRef.current = current.queueItemId
+    void buildPlayer(current)
   }, [current, buildPlayer])
 
   // Mantiene la cola al día
@@ -202,26 +184,23 @@ export function Player({ playerKey }: { playerKey: string }) {
     }
   }
 
-  function toggleMute() {
+  function changeVolume(next: number) {
+    const value = Math.max(0, Math.min(100, next))
+    setVolume(value)
+    volumeRef.current = value
+
     const player = playerRef.current
     if (!player) return
-    if (player.isMuted()) {
-      player.unMute()
-      player.setVolume(100)
-      setMuted(false)
-      setNeedsGesture(false)
-    } else {
+
+    if (value === 0) {
       player.mute()
-      setMuted(true)
+    } else {
+      player.unMute()
+      player.setVolume(value)
     }
   }
 
-  function seek(delta: number) {
-    const player = playerRef.current
-    if (!player || !current?.durationSec) return
-    const target = Math.max(0, Math.min(current.durationSec, player.getCurrentTime() + delta))
-    player.seekTo(target, true)
-  }
+  const isMuted = volume === 0
 
   if (loading) {
     return (
@@ -248,8 +227,18 @@ export function Player({ playerKey }: { playerKey: string }) {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 p-4">
+      <div className="flex justify-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <Home className="h-4 w-4" />
+          Cambiar de modo
+        </Link>
+      </div>
+
       <Card>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="flex gap-4">
             {current.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -269,7 +258,7 @@ export function Player({ playerKey }: { playerKey: string }) {
             </div>
           </div>
 
-          {/* Reproductor de YouTube, oculto: controlamos el audio con la API */}
+          {/* Reproductor de YouTube oculto: el audio y el volumen los controlamos con la API */}
           <div ref={holderRef} className="hidden" aria-hidden="true" />
 
           {needsGesture && (
@@ -280,25 +269,43 @@ export function Player({ playerKey }: { playerKey: string }) {
           )}
 
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button variant="outline" size="lg" onClick={() => seek(-10)} aria-label="Retroceder 10 segundos">
-              <SkipBack />
-              10
-            </Button>
             <Button size="lg" onClick={togglePlay} aria-label={isPlaying ? "Pausar" : "Reproducir"}>
               {isPlaying ? <Pause /> : <Play />}
               {isPlaying ? "Pausa" : "Reproducir"}
             </Button>
-            <Button variant="outline" size="lg" onClick={() => seek(10)} aria-label="Avanzar 10 segundos">
-              10
-              <SkipForward />
-            </Button>
-            <Button variant="outline" size="icon-lg" onClick={toggleMute} aria-label={muted ? "Activar sonido" : "Silenciar"}>
-              {muted ? <VolumeX /> : <Volume2 />}
-            </Button>
-            <Button variant="secondary" size="lg" onClick={() => void advance()}>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => void advance()}
+              aria-label="Saltar a la siguiente"
+            >
               <SkipForward />
               Saltar
             </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              onClick={() => changeVolume(isMuted ? volumeRef.current || DEFAULT_VOLUME : 0)}
+              aria-label={isMuted ? "Activar sonido" : "Silenciar"}
+            >
+              {isMuted ? <VolumeX /> : <Volume2 />}
+            </Button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={volume}
+              onChange={(e) => changeVolume(Number(e.target.value))}
+              aria-label="Volumen"
+              className="h-2 w-full max-w-xs cursor-pointer accent-primary"
+            />
+            <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+              {volume}%
+            </span>
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
