@@ -1,0 +1,120 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { ListMusic, Loader2, LogOut, Play, SkipForward } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { YoutubeSearch } from "@/components/search/youtube-search"
+import { AddByUrlForm } from "@/components/search/add-by-url-form"
+import { QueueList } from "@/components/queue/queue-list"
+import { HistoryList } from "@/components/history/history-list"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
+import { useQueue } from "@/hooks/use-queue"
+import { useQueueSync } from "@/hooks/use-queue-sync"
+import { MAX_QUEUE, type YoutubeResult } from "@/types"
+
+export function ModDashboard({ username }: { username: string }) {
+  const router = useRouter()
+  const {
+    queue,
+    history,
+    loading,
+    queueFull,
+    addSong,
+    removeItem,
+    playNext,
+    reorder,
+    reAddFromHistory,
+    refresh,
+  } = useQueue()
+
+  const [preloaded, setPreloaded] = useState<YoutubeResult | null>(null)
+  const [advancing, setAdvancing] = useState(false)
+
+  useQueueSync(refresh)
+
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="font-heading text-xl font-semibold">yt-str-nek</span>
+            <span className="text-xs text-muted-foreground">· {username}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Salir"
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" })
+                router.push("/login")
+                router.refresh()
+              }}
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.1fr_1fr]">
+        <section className="flex flex-col gap-6">
+          <YoutubeSearch
+            onAdd={addSong}
+            disabled={queueFull}
+            preloaded={preloaded}
+            clearPreloaded={() => setPreloaded(null)}
+          />
+          <AddByUrlForm onResolved={setPreloaded} disabled={queueFull} />
+        </section>
+
+        <section className="flex flex-col gap-6">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ListMusic className="h-4 w-4 text-primary" />
+                Cola
+                <span className="text-sm font-normal text-muted-foreground">
+                  {queue.length}/{MAX_QUEUE}
+                </span>
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={queue.length === 0 || advancing}
+                onClick={async () => {
+                  setAdvancing(true)
+                  await playNext()
+                  setAdvancing(false)
+                }}
+              >
+                {advancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                <span>Reproducir siguiente</span>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              ) : (
+                <QueueList queue={queue} onRemove={removeItem} onReorder={reorder} />
+              )}
+              {queue.length > 0 && (
+                <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
+                  <SkipForward className="h-3 w-3" />
+                  Arrastra las canciones para cambiar el orden.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <HistoryList history={history} onReAdd={reAddFromHistory} disabled={queueFull} />
+        </section>
+      </main>
+    </div>
+  )
+}
