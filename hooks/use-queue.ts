@@ -115,14 +115,7 @@ export function useQueue() {
       const res = await fetch("/api/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          youtubeId: item.song.youtubeId,
-          title: item.song.title,
-          channel: item.song.channel,
-          thumbnail: item.song.thumbnail,
-          durationSec: item.song.durationSec,
-          requesterName: item.requesterName || undefined,
-        }),
+        body: JSON.stringify({ id: item.id }),
       })
       const data = await res.json()
       if (data.error) {

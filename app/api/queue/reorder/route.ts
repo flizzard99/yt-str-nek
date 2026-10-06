@@ -1,28 +1,41 @@
+import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { reorderQueueSchema } from "@/lib/validators"
-import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  try {
-    const body = await req.json()
-    const parsed = reorderQueueSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
-    }
+  const parsed = reorderQueueSchema.safeParse(await req.json().catch(() => ({})))
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
+  }
 
-    for (const item of parsed.data.items) {
-      await prisma.queueItem.update({
+  const { items } = parsed.data
+
+  const current = await prisma.queueItem.findMany({
+    orderBy: { position: "asc" },
+    select: { id: true },
+  })
+  const currentIds = new Set(current.map((i) => i.id))
+
+  // El cliente debe enviar exactamente la cola completa y sin ids ajenos.
+  if (items.length !== current.length || items.some((i) => !currentIds.has(i.id))) {
+    return NextResponse.json(
+      { error: "El orden recibido no coincide con la cola actual" },
+      { status: 409 }
+    )
+  }
+
+  await prisma.$transaction(
+    items.map((item) =>
+      prisma.queueItem.update({
         where: { id: item.id },
         data: { position: item.position },
       })
-    }
+    )
+  )
 
-    return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: "Error al reordenar" }, { status: 500 })
-  }
+  return NextResponse.json({ ok: true })
 }

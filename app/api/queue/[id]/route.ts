@@ -1,33 +1,22 @@
+import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { NextResponse } from "next/server"
+import { renumberQueue } from "@/lib/songs"
 
 export async function DELETE(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  try {
-    const { id } = await params
-    await prisma.queueItem.delete({ where: { id } })
+  const { id } = await params
 
-    // Recalcular posiciones
-    const remaining = await prisma.queueItem.findMany({
-      orderBy: { position: "asc" },
-      select: { id: true },
-    })
-
-    for (let i = 0; i < remaining.length; i++) {
-      await prisma.queueItem.update({
-        where: { id: remaining[i].id },
-        data: { position: i + 1 },
-      })
-    }
-
-    return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: "Error al eliminar" }, { status: 500 })
+  const item = await prisma.queueItem.delete({ where: { id } }).catch(() => null)
+  if (!item) {
+    return NextResponse.json({ error: "La canción no está en la cola" }, { status: 404 })
   }
+
+  await renumberQueue()
+  return NextResponse.json({ ok: true })
 }

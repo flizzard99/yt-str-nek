@@ -1,6 +1,7 @@
+import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { NextResponse } from "next/server"
+import { MAX_QUEUE, nextQueuePosition, upsertSong } from "@/lib/songs"
 
 export async function GET() {
   const session = await getSession()
@@ -19,55 +20,50 @@ export async function GET() {
   return NextResponse.json({ history })
 }
 
+/** Reañade una canción del historial al final de la cola. */
 export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  try {
-    const body = await req.json()
-    const { songId, youtubeId, title, channel, thumbnail, durationSec, requesterName } = body
-
-    let song = await prisma.song.findUnique({
-      where: { youtubeId },
-    })
-
-    if (!song && youtubeId) {
-      song = await prisma.song.create({
-        data: { youtubeId, title, channel, thumbnail, durationSec: durationSec ?? null },
-      })
-    }
-
-    if (!song && songId) {
-      song = await prisma.song.findUnique({ where: { id: songId } })
-    }
-
-    if (!song) return NextResponse.json({ error: "Canción no encontrada" }, { status: 400 })
-
-    const queueCount = await prisma.queueItem.count()
-    if (queueCount >= 20) {
-      return NextResponse.json({ error: "La cola está llena (máx. 20 canciones)" }, { status: 400 })
-    }
-
-    const lastPos = await prisma.queueItem.aggregate({
-      _max: { position: true },
-    })
-    const nextPos = (lastPos._max.position || 0) + 1
-
-    const item = await prisma.queueItem.create({
-      data: {
-        position: nextPos,
-        requesterName: requesterName || null,
-        addedById: session.id,
-        songId: song.id,
-      },
-      include: {
-        song: true,
-        addedBy: { select: { id: true, username: true } },
-      },
-    })
-
-    return NextResponse.json({ item }, { status: 201 })
-  } catch {
-    return NextResponse.json({ error: "Error al añadir desde historial" }, { status: 500 })
+  const body = await req.json().catch(() => ({}))
+  const historyId = typeof body.id === "string" ? body.id : null
+  if (!historyId) {
+    return NextResponse.json({ error: "Cancción no indicada" }, { status: 400 })
   }
+
+  const queueCount = await prisma.queueItem.count()
+  if (queueCount >= MAX_QUEUE) {
+    return NextResponse.json(
+      { error: `La cola está llena (máx. ${MAX_QUEUE} canciones)` },
+      { status: 400 }
+    )
+  }
+
+  const historyItem = await prisma.historyItem.findUnique({
+    where: { id: historyId },
+    include: { song: true },
+  })
+  if (!historyItem) {
+    return NextResponse.json({ error: "La canción no está en el historial" }, { status: 404 })
+  }
+
+  const song = await upsertSong(historyItem.song.youtubeId)
+  if (!song) {
+    return NextResponse.json({ error: "El vídeo ya no está disponible" }, { status: 404 })
+  }
+
+  const item = await prisma.queueItem.create({
+    data: {
+      position: await nextQueuePosition(),
+      requesterName: historyItem.requesterName,
+      addedById: session.id,
+      songId: song.id,
+    },
+    include: {
+      song: true,
+      addedBy: { select: { id: true, username: true } },
+    },
+  })
+
+  return NextResponse.json({ item }, { status: 201 })
 }

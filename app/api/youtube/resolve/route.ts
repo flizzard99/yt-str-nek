@@ -5,6 +5,7 @@ import { extractYoutubeId, getVideoDetails } from "@/lib/youtube"
 
 const bodySchema = z.object({ url: z.string().trim().min(1) })
 
+/** Resuelve un enlace de YouTube a los datos del vídeo, sin guardarlo en la cola. */
 export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })

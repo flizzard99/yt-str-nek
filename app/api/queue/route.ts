@@ -1,7 +1,8 @@
+import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { MAX_QUEUE, nextQueuePosition, upsertSong } from "@/lib/songs"
 import { addToQueueSchema } from "@/lib/validators"
-import { NextResponse } from "next/server"
 
 export async function GET() {
   const session = await getSession()
@@ -24,45 +25,48 @@ export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  try {
-    const body = await req.json()
-    const parsed = addToQueueSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
-    }
-
-    const { youtubeId, requesterName } = parsed.data
-
-    const existingSong = await prisma.song.findUnique({ where: { youtubeId } })
-    if (!existingSong) {
-      return NextResponse.json({ error: "Canción no encontrada. Resuelve la URL primero." }, { status: 400 })
-    }
-
-    const queueCount = await prisma.queueItem.count()
-    if (queueCount >= 20) {
-      return NextResponse.json({ error: "La cola está llena (máx. 20 canciones)" }, { status: 400 })
-    }
-
-    const lastPos = await prisma.queueItem.aggregate({
-      _max: { position: true },
-    })
-    const nextPos = (lastPos._max.position || 0) + 1
-
-    const item = await prisma.queueItem.create({
-      data: {
-        position: nextPos,
-        requesterName: requesterName || null,
-        addedById: session.id,
-        songId: existingSong.id,
-      },
-      include: {
-        song: true,
-        addedBy: { select: { id: true, username: true } },
-      },
-    })
-
-    return NextResponse.json({ item }, { status: 201 })
-  } catch {
-    return NextResponse.json({ error: "Error al añadir a la cola" }, { status: 500 })
+  const queueCount = await prisma.queueItem.count()
+  if (queueCount >= MAX_QUEUE) {
+    return NextResponse.json(
+      { error: `La cola está llena (máx. ${MAX_QUEUE} canciones)` },
+      { status: 400 }
+    )
   }
+
+  const parsed = addToQueueSchema.safeParse(await req.json().catch(() => ({})))
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
+  }
+
+  const { youtubeId, requesterName } = parsed.data
+
+  if (!process.env.YOUTUBE_API_KEY) {
+    return NextResponse.json(
+      { error: "YOUTUBE_API_KEY no está configurada en el servidor" },
+      { status: 503 }
+    )
+  }
+
+  const song = await upsertSong(youtubeId)
+  if (!song) {
+    return NextResponse.json(
+      { error: "No se encontró el vídeo en YouTube" },
+      { status: 404 }
+    )
+  }
+
+  const item = await prisma.queueItem.create({
+    data: {
+      position: await nextQueuePosition(),
+      requesterName: requesterName?.trim() || null,
+      addedById: session.id,
+      songId: song.id,
+    },
+    include: {
+      song: true,
+      addedBy: { select: { id: true, username: true } },
+    },
+  })
+
+  return NextResponse.json({ item }, { status: 201 })
 }
