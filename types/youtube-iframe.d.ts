@@ -34,6 +34,9 @@ export interface YTPlayer {
   isMuted(): boolean
   setVolume(volume: number): void
   getCurrentTime(): number
+  // Necesario para saber si la reproducción arranca de verdad o si el
+  // navegador la ha bloqueado: la API no lanza error en ese caso.
+  getPlayerState(): number
   seekTo(seconds: number, allowSeekAhead: boolean): void
   destroy(): void
 }

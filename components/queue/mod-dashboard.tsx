@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ListMusic, Loader2, LogOut, Play, SkipForward, Radio } from "lucide-react"
+import { ListMusic, Loader2, LogOut, Play, SkipForward, Radio, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { YoutubeSearch } from "@/components/search/youtube-search"
@@ -52,6 +53,13 @@ export function ModDashboard({ username }: { username: string }) {
               <Radio />
               <span className="hidden sm:inline">Reproductor</span>
             </a>
+            <Link
+              href="/users"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              <Users />
+              <span className="hidden sm:inline">Usuarios</span>
+            </Link>
             <ThemeToggle />
             <Button
               variant="ghost"

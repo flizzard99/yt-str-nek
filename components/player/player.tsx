@@ -63,6 +63,8 @@ export function Player() {
   const loadedIdRef = useRef<string | null>(null)
   const volumeRef = useRef(DEFAULT_VOLUME)
   const advanceRef = useRef<(() => Promise<void>) | null>(null)
+  const ytRef = useRef<YTNamespace | null>(null)
+  const watchdogRef = useRef<number | null>(null)
 
   const loadCurrent = useCallback(async () => {
     try {
@@ -101,16 +103,63 @@ export function Player() {
     }
   }, [loadCurrent])
 
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current !== null) {
+      window.clearInterval(watchdogRef.current)
+      watchdogRef.current = null
+    }
+  }, [])
+
+  /**
+   * La IFrame API no lanza error cuando el navegador bloquea el autoplay: se
+   * limita a no cambiar de estado. Por eso no basta con llamar a playVideo(),
+   * hay que comprobar que la canción se está reproduciendo de verdad.
+   */
+  const startWatchdog = useCallback(
+    (songId: string) => {
+      clearWatchdog()
+      let tries = 0
+
+      watchdogRef.current = window.setInterval(() => {
+        tries += 1
+        const player = playerRef.current
+        const YT = ytRef.current
+        // Si ya se está montando otra canción, este vigilante se descarta
+        if (!player || !YT || loadedIdRef.current !== songId) {
+          clearWatchdog()
+          return
+        }
+
+        if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+          clearWatchdog()
+          return
+        }
+
+        if (tries >= 10) {
+          clearWatchdog()
+          setIsPlaying(false)
+          setNeedsGesture(true)
+        }
+      }, 200)
+    },
+    [clearWatchdog]
+  )
+
   /** Crea el reproductor para una canción. */
   const buildPlayer = useCallback(async (song: PlayerSong) => {
     const YT = await loadYouTubeApi()
     if (!holderRef.current) return
 
+    ytRef.current = YT
+    clearWatchdog()
     playerRef.current?.destroy()
     if (holderRef.current) holderRef.current.innerHTML = ""
 
     const node = document.createElement("div")
     holderRef.current.appendChild(node)
+
+    setIsPlaying(false)
+    setNeedsGesture(false)
 
     playerRef.current = new YT.Player(node, {
       videoId: song.youtubeId,
@@ -123,31 +172,46 @@ export function Player() {
       },
       events: {
         onReady: (event: { target: YTEventTarget }) => {
-          // Los navegadores bloquean el autoplay con sonido sin interacción
-          // previa, así que se arranca silenciado y seActiva el volumen después.
-          try {
-            event.target.mute()
-            event.target.setVolume(volumeRef.current)
-            event.target.playVideo()
-            event.target.unMute()
-            setIsPlaying(true)
-            setNeedsGesture(false)
-          } catch {
-            setNeedsGesture(true)
-          }
+          // Los navegadores bloquean el autoplay con sonido si el visitante no
+          // ha interactuado antes. Se arranca silenciado, que sí está permitido,
+          // y el sonido se activa después cuando se confirme que está sonando.
+          event.target.mute()
+          event.target.setVolume(volumeRef.current)
+          event.target.playVideo()
+          startWatchdog(song.queueItemId)
         },
         onStateChange: (event: { data: number }) => {
-          if (event.data === YT.PlayerState.PLAYING) setIsPlaying(true)
+          if (event.data === YT.PlayerState.PLAYING) {
+            clearWatchdog()
+            setIsPlaying(true)
+            setNeedsGesture(false)
+            // Solo si el volumen no está a 0: si el usuario lo silenció a
+            // propósito, no se le quita el silencio.
+            if (volumeRef.current > 0) playerRef.current?.unMute()
+          }
           if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
           if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
         },
+        onError: () => {
+          clearWatchdog()
+          setIsPlaying(false)
+          setNeedsGesture(true)
+        },
       },
     })
-  }, [])
+  }, [clearWatchdog, startWatchdog])
 
   useEffect(() => {
     advanceRef.current = advance
   }, [advance])
+
+  // Limpia el vigilante y el reproductor al salir de la página
+  useEffect(() => {
+    return () => {
+      if (watchdogRef.current !== null) window.clearInterval(watchdogRef.current)
+      playerRef.current?.destroy()
+    }
+  }, [])
 
   // Primera carga
   useEffect(() => {
@@ -164,12 +228,22 @@ export function Player() {
     void buildPlayer(current)
   }, [current, buildPlayer])
 
-  // Mantiene la cola al día
-  useEffect(() => {
-    const id = setInterval(() => {
+  // Mantiene la cola al día. Sondea siempre, también con la pestaña oculta: si
+  // no, una pestaña minimizada dejaría de reproducir y la cola no avanzaría.
+useEffect(() => {
+    const id = setInterval(() => void loadCurrent(), 5000)
+
+    // Al volver al frente, se consulta de inmediato en lugar de esperar al
+    // siguiente intervalo.
+    const onVisible = () => {
       if (document.visibilityState === "visible") void loadCurrent()
-    }, 5000)
-    return () => clearInterval(id)
+    }
+    document.addEventListener("visibilitychange", onVisible)
+
+    return () => {
+      clearInterval(id)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
   }, [loadCurrent])
 
   function togglePlay() {

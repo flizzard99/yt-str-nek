@@ -11,6 +11,7 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 - Reordenar la cola arrastrando (drag & drop) o con teclado
 - Marcar como reproducida, lo que mueve la canción al historial
 - Reañadir canciones desde el historial
+- Gestión de usuarios desde `/users`: crear, renombrar, cambiar contraseña y eliminar
 - Sincronización entre pestañas (sondeo cada 5 s + al recuperar el foco)
 - Acceso restringido por usuario y contraseña (sesión con cookie `httpOnly` firmada)
 - Reproductor en `/player` para el streamer, con la canción actual, control de volumen y avance automático al terminar
@@ -23,9 +24,20 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 | `/login` | Inicio de sesión |
 | `/mod` | Panel de moderadores: cola, búsqueda, historial |
 | `/player` | Reproductor del streamer |
+| `/users` | Gestión de usuarios y contraseñas |
 
-`/mod` y `/player` exigen sesión. Si entras sin ella, el login te devuelve a la página
-que intentabas abrir.
+`/mod`, `/player` y `/users` exigen sesión. Si entras sin ella, el login te devuelve a
+la página que intentabas abrir.
+
+## Usuarios
+
+Cualquier usuario con acceso puede entrar a `/users` y crear, renombrar o cambiar la
+contraseña de los demás. Hay dos salvaguardas: no puedes eliminar tu propio usuario, ni
+dejar la aplicación sin ninguno.
+
+Al borrar un usuario, las canciones que había añadido **se quedan** en la cola y en el
+historial, pero sin autor. Es preferible a borrar la cola entera por un cambio de
+contraseña.
 
 ## Reproductor
 
@@ -38,6 +50,10 @@ El volumen va de 0 a 100 y el valor se conserva al cambiar de canción.
 Cada entrada de la cola se identifica por su propio id, no por el vídeo. Así, si la misma
 canción está en la cola dos veces, al terminar la primera se pasa a la segunda en lugar de
 volver a empezar el vídeo.
+
+Si el navegador bloquea la reproducción automática, la página lo detecta y muestra un
+botón **Activar reproducción**. La comprobación es necesaria porque la IFrame API de
+YouTube no lanza ningún error cuando no arranca: simplemente se queda quieta.
 
 ### Sobre el audio
 

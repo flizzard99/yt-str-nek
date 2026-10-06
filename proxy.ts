@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server"
 // y cada API vuelven a validar la sesión por su cuenta.
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session"
 
-const PROTECTED = ["/mod", "/player"]
+const PROTECTED = ["/mod", "/player", "/users"]
 
 export async function proxy(request: NextRequest) {
   const { pathname, origin } = request.nextUrl
@@ -24,5 +24,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/mod/:path*", "/player/:path*"],
+  matcher: ["/login", "/mod/:path*", "/player/:path*", "/users/:path*"],
 }
