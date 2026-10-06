@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Loader2, Pencil, Trash2, UserPlus, Users } from "lucide-react"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -228,15 +228,11 @@ export function UsersManager() {
               if (!open) setForm(EMPTY)
             }}
           >
-            <DialogClose
-              className={`${buttonVariants({ variant: "outline" })} mt-4`}
-              render={
-                <Button variant="outline" type="button">
-                  <UserPlus />
-                  Nuevo usuario
-                </Button>
-              }
-            />
+            {/* Abre el diálogo. Con DialogClose esto no abría nada: solo cierra. */}
+            <Button variant="outline" className="mt-4" onClick={() => setCreating(true)}>
+              <UserPlus />
+              Nuevo usuario
+            </Button>
             <DialogContent>
               <form onSubmit={submitCreate}>
                 <DialogHeader>
@@ -294,10 +290,9 @@ export function UsersManager() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <DialogClose
-                    className={buttonVariants({ variant: "ghost" })}
-                    render={<Button type="button" variant="ghost" disabled={busy}>Cancelar</Button>}
-                  />
+                  <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+                    Cancelar
+                  </DialogClose>
                   <Button type="submit" disabled={busy}>
                     {busy && <Loader2 className="animate-spin" />}
                     Crear
@@ -376,10 +371,9 @@ export function UsersManager() {
                 </div>
               </div>
               <DialogFooter>
-                <DialogClose
-                  className={buttonVariants({ variant: "ghost" })}
-                  render={<Button type="button" variant="ghost" disabled={busy}>Cancelar</Button>}
-                />
+                <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+                  Cancelar
+                </DialogClose>
                 <Button type="submit" disabled={busy}>
                   {busy && <Loader2 className="animate-spin" />}
                   Guardar
@@ -403,10 +397,9 @@ export function UsersManager() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose
-              className={buttonVariants({ variant: "ghost" })}
-              render={<Button type="button" variant="ghost" disabled={busy}>Cancelar</Button>}
-            />
+            <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+              Cancelar
+            </DialogClose>
             <Button variant="destructive" onClick={() => void confirmRemove()} disabled={busy}>
               {busy && <Loader2 className="animate-spin" />}
               Eliminar

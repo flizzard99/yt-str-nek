@@ -56,6 +56,7 @@ export function Player() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(DEFAULT_VOLUME)
   const [needsGesture, setNeedsGesture] = useState(false)
+  const [position, setPosition] = useState({ current: 0, total: 0 })
 
   const holderRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
@@ -65,6 +66,7 @@ export function Player() {
   const advanceRef = useRef<(() => Promise<void>) | null>(null)
   const ytRef = useRef<YTNamespace | null>(null)
   const watchdogRef = useRef<number | null>(null)
+  const scrubbingRef = useRef(false)
 
   const loadCurrent = useCallback(async () => {
     try {
@@ -250,6 +252,20 @@ useEffect(() => {
     }
   }, [loadCurrent])
 
+  // Sigue la posición para mover la barra de avance. Mientras el usuario la
+  // arrastra no se toca, para que no salte bajo su dedo.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const player = playerRef.current
+      if (!player || scrubbingRef.current) return
+      const total = player.getDuration()
+      if (!Number.isFinite(total) || total <= 0) return
+      setPosition({ current: player.getCurrentTime(), total })
+    }, 500)
+
+    return () => clearInterval(id)
+  }, [])
+
   function togglePlay() {
     const player = playerRef.current
     if (!player) return
@@ -276,6 +292,25 @@ useEffect(() => {
       player.unMute()
       player.setVolume(value)
     }
+  }
+
+  function seekTo(seconds: number) {
+    const player = playerRef.current
+    if (!player) return
+    const total = player.getDuration()
+    if (!Number.isFinite(total)) return
+    const clamped = Math.max(0, Math.min(total, seconds))
+    player.seekTo(clamped, true)
+    setPosition({ current: clamped, total })
+  }
+
+  function onScrubStart() {
+    scrubbingRef.current = true
+  }
+
+  function onScrubEnd(seconds: number) {
+    scrubbingRef.current = false
+    seekTo(seconds)
   }
 
   const isMuted = volume === 0
@@ -386,11 +421,40 @@ useEffect(() => {
             </Button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="space-y-1.5">
+            <input
+              type="range"
+              min={0}
+              max={Math.max(1, Math.round(position.total))}
+              step={1}
+              value={Math.round(position.current)}
+              onChange={(e) => setPosition((p) => ({ ...p, current: Number(e.target.value) }))}
+              onPointerDown={onScrubStart}
+              onPointerUp={(e) => onScrubEnd(Number(e.currentTarget.value))}
+              onKeyUp={(e) => {
+                // El teclado no dispara pointerup: hay que cerrar el arrastre
+                // a mano o la barra se queda congelada.
+                if (e.currentTarget.value !== undefined) onScrubEnd(Number(e.currentTarget.value))
+              }}
+              onBlur={(e) => onScrubEnd(Number(e.currentTarget.value))}
+              disabled={position.total <= 0}
+              aria-label="Posición de la canción"
+              aria-valuetext={`${formatDuration(Math.round(position.current))} de ${formatDuration(Math.round(position.total))}`}
+              className="h-2 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+              <span>{formatDuration(Math.round(position.current))}</span>
+              <span>
+                {formatDuration(position.total > 0 ? Math.round(position.total) : null)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-end justify-center gap-3 pt-2">
             <Button
               variant="ghost"
               size="icon-lg"
-              onClick={() => changeVolume(isMuted ? volumeRef.current || DEFAULT_VOLUME : 0)}
+              onClick={() => changeVolume(isMuted ? DEFAULT_VOLUME : 0)}
               aria-label={isMuted ? "Activar sonido" : "Silenciar"}
             >
               {isMuted ? <VolumeX /> : <Volume2 />}
@@ -403,9 +467,12 @@ useEffect(() => {
               value={volume}
               onChange={(e) => changeVolume(Number(e.target.value))}
               aria-label="Volumen"
-              className="h-2 w-full max-w-xs cursor-pointer accent-primary"
+              aria-valuetext={`${volume}%`}
+              // writing-mode gira el deslizador: max arriba, min abajo
+              style={{ writingMode: "vertical-lr", direction: "rtl" }}
+              className="h-28 w-2 cursor-pointer accent-primary"
             />
-            <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+            <span className="w-10 shrink-0 pb-1 text-right text-sm tabular-nums text-muted-foreground">
               {volume}%
             </span>
           </div>

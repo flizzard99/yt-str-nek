@@ -69,7 +69,11 @@ del usuario.
 un botón para saltar a la siguiente y un deslizador de volumen. Cuando la canción
 termina, se marca como reproducida y carga la siguiente sola.
 
-El volumen va de 0 a 100 y el valor se conserva al cambiar de canción.
+El volumen va de 0 a 100, con un deslizador vertical y el porcentaje al lado. El valor se
+conserva al cambiar de canción.
+
+La barra de tiempo va de 0 a la duración y se arrastra para saltar al punto que elijas,
+con el tiempo actual y el total a cada lado.
 
 Hay dos modos de ver la canción: **solo audio** y **con vídeo**. Por defecto solo audio, que
 es lo habitual si el reproductor va en una pantalla aparte. El botón cambia entre uno y
