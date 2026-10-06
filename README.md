@@ -98,4 +98,16 @@ Para crear el primer usuario en producción, define `SEED_USERNAME` y `SEED_PASS
 | `npm run lint` | ESLint |
 | `npx prisma studio` | Interfaz visual de la base de datos |
 | `npm run db:seed` | Crea el usuario inicial |
+| `npm run db:seed -- --force` | Crea el usuario o actualiza su contraseña |
 | `npm run prisma:migrate` | Crea una migración en desarrollo |
+| `bash scripts/prod-bootstrap.sh <url> [usuario]` | Aplica migraciones y crea/actualiza un mod contra otra base |
+
+### Preparar la base de producción
+
+Para desplegar en Vercel, las migraciones no se aplican solas en el build. Usa el script, que pide la contraseña de forma oculta y no guarda la URL en disco:
+
+```bash
+bash scripts/prod-bootstrap.sh "postgresql://...tu-url..." nek
+```
+
+Pide la contraseña del mod por terminal. Si el usuario ya existe, actualiza su contraseña.
