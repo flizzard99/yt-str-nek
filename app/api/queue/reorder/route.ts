@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { prisma } from "@/lib/prisma"
 import { reorderQueueSchema } from "@/lib/validators"
 
 export async function POST(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const parsed = reorderQueueSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) {

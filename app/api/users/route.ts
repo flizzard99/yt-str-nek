@@ -1,13 +1,36 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { getSession } from "@/lib/auth"
+import { requireRoles, ADMIN_ROLES } from "@/lib/authorize"
+import { parseRole, type Role } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
 const MIN_PASSWORD = 8
 
+/**
+ * Elige el rol de un usuario nuevo. Si no se indica uno, el primer usuario de
+ * la aplicación es admin y los demás moderadores: así siempre queda alguien
+ * que pueda entrar en /users.
+ *
+ * Un rol explícito pero desconocido es un error, no motivo para aplicarle un
+ * rol por defecto en silencio.
+ */
+async function resolveNewRole(
+  requested: unknown
+): Promise<{ role: Role } | { error: string }> {
+  if (requested !== undefined) {
+    const explicit = parseRole(requested)
+    if (!explicit) return { error: "Ese rol no existe" }
+    return { role: explicit }
+  }
+
+  const total = await prisma.user.count()
+  return { role: total === 0 ? "admin" : "mod" }
+}
+
 export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(ADMIN_ROLES)
+  if (guard instanceof NextResponse) return guard
+  const { session } = guard
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "asc" },
@@ -34,8 +57,8 @@ export async function GET() {
 
 /** Crea un usuario nuevo. */
 export async function POST(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(ADMIN_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const body = await req.json().catch(() => ({}))
   const username = typeof body.username === "string" ? body.username.trim() : ""
@@ -44,6 +67,11 @@ export async function POST(req: Request) {
   if (!username) {
     return NextResponse.json({ error: "Falta el nombre de usuario" }, { status: 400 })
   }
+  const resolved = await resolveNewRole(body.role)
+  if ("error" in resolved) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 })
+  }
+  const role = resolved.role
   if (username.length > 32) {
     return NextResponse.json(
       { error: "El nombre de usuario es demasiado largo" },
@@ -66,7 +94,7 @@ export async function POST(req: Request) {
   }
 
   const user = await prisma.user.create({
-    data: { username, password: await bcrypt.hash(password, 10) },
+    data: { username, password: await bcrypt.hash(password, 10), role },
     select: { id: true, username: true, role: true, createdAt: true },
   })
 

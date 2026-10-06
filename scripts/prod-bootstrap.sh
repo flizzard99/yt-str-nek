@@ -61,11 +61,14 @@ if [ -z "$SEED_PASS" ]; then
   exit 1
 fi
 
-export PGURL SEED_USER SEED_PASS
+read -r -p "Rol [admin/mod/streamer] (por defecto: admin): " SEED_ROLE
+SEED_ROLE=${SEED_ROLE:-admin}
+
+export PGURL SEED_USER SEED_PASS SEED_ROLE
 
 # shellcheck disable=SC2016
 env POSTGRES_PRISMA_URL="$PGURL" POSTGRES_URL_NON_POOLING="$PGURL" \
-  SEED_USERNAME="$SEED_USER" SEED_PASSWORD="$SEED_PASS" \
+  SEED_USERNAME="$SEED_USER" SEED_PASSWORD="$SEED_PASS" SEED_ROLE="$SEED_ROLE" \
   sh -c 'npx tsx prisma/seed.ts --force'
 
 echo

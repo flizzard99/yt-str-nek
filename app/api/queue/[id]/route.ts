@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { prisma } from "@/lib/prisma"
 import { renumberQueue } from "@/lib/songs"
 
@@ -7,8 +7,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const { id } = await params
 

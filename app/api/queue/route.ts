@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { prisma } from "@/lib/prisma"
 import { MAX_QUEUE, nextQueuePosition, upsertSong } from "@/lib/songs"
 import { addToQueueSchema } from "@/lib/validators"
 
 export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const queue = await prisma.queueItem.findMany({
     include: {
@@ -22,8 +22,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
+  const { session } = guard
 
   const queueCount = await prisma.queueItem.count()
   if (queueCount >= MAX_QUEUE) {

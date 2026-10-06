@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { prisma } from "@/lib/prisma"
 import { renumberQueue } from "@/lib/songs"
 
 /** Marca la primera canción como reproducida y la mueve al historial. */
 export async function POST() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const first = await prisma.queueItem.findFirst({
     orderBy: { position: "asc" },

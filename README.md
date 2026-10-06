@@ -10,8 +10,9 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 - Cola con máximo **20** canciones
 - Reordenar la cola arrastrando (drag & drop) o con teclado
 - Marcar como reproducida, lo que mueve la canción al historial
-- Reañadir canciones desde el historial
-- Gestión de usuarios desde `/users`: crear, renombrar, cambiar contraseña y eliminar
+- Reañadir canciones desde el historial, o vaciarlo entero de una vez
+- Tres roles: `admin`, `mod` y `streamer`
+- Gestión de usuarios desde `/users`: crear, renombrar, cambiar contraseña, rol y eliminar
 - Sincronización entre pestañas (sondeo cada 5 s + al recuperar el foco)
 - Acceso restringido por usuario y contraseña (sesión con cookie `httpOnly` firmada)
 - Reproductor en `/player` para el streamer, con la canción actual, control de volumen y avance automático al terminar
@@ -24,20 +25,43 @@ Panel de moderadores para gestionar la cola de peticiones de música de un strea
 | `/login` | Inicio de sesión |
 | `/mod` | Panel de moderadores: cola, búsqueda, historial |
 | `/player` | Reproductor del streamer |
-| `/users` | Gestión de usuarios y contraseñas |
+| `/users` | Gestión de usuarios, contraseñas y roles |
 
 `/mod`, `/player` y `/users` exigen sesión. Si entras sin ella, el login te devuelve a
-la página que intentabas abrir.
+la página que intentabas abrir. La portada solo muestra los modos a los que tu rol tiene
+acceso.
+
+## Roles
+
+| Rol | Panel `/mod` | Reproductor `/player` | Usuarios `/users` |
+| --- | --- | --- | --- |
+| `admin` | Sí | Sí | Sí |
+| `mod` | Sí | Sí | No |
+| `streamer` | No | Sí | No |
+
+El rol viaja dentro del JWT, así que un cambio de rol no invalida la sesión abierta:
+hay que volver a entrar para que el proxy lo tenga en cuenta.
+
+Dos salvaguardas para no dejar la aplicación inservible: no se puede quitar el rol ni
+borrar al último `admin`, y no se puede eliminar a uno mismo.
+
+El primer usuario creado es `admin`. Los siguientes, si no se indica rol, son `mod`.
 
 ## Usuarios
 
-Cualquier usuario con acceso puede entrar a `/users` y crear, renombrar o cambiar la
-contraseña de los demás. Hay dos salvaguardas: no puedes eliminar tu propio usuario, ni
-dejar la aplicación sin ninguno.
+Solo los `admin` entran en `/users`, y desde ahí crean, renombran, cambian la contraseña,
+cambian el rol o eliminan usuarios.
 
 Al borrar un usuario, las canciones que había añadido **se quedan** en la cola y en el
 historial, pero sin autor. Es preferible a borrar la cola entera por un cambio de
 contraseña.
+
+### Un detalle de la sesión
+
+La sesión es un JWT sin estado: no hay lista de sesiones en el servidor que poder revocar.
+Cerrar sesión borra la cookie del navegador, pero una copia de esa cookie seguiría siendo
+válida hasta que expire (7 días). Para invalidar de verdad hay que cambiar la contraseña
+del usuario.
 
 ## Reproductor
 
@@ -46,6 +70,10 @@ un botón para saltar a la siguiente y un deslizador de volumen. Cuando la canci
 termina, se marca como reproducida y carga la siguiente sola.
 
 El volumen va de 0 a 100 y el valor se conserva al cambiar de canción.
+
+Hay dos modos de ver la canción: **solo audio** y **con vídeo**. Por defecto solo audio, que
+es lo habitual si el reproductor va en una pantalla aparte. El botón cambia entre uno y
+otro sin parar la música.
 
 Cada entrada de la cola se identifica por su propio id, no por el vídeo. Así, si la misma
 canción está en la cola dos veces, al terminar la primera se pasa a la segunda en lugar de
@@ -122,6 +150,7 @@ Abre `http://localhost:3000` e inicia sesión con el usuario creado en el seed.
 | `YOUTUBE_API_KEY` | Clave de la YouTube Data API v3 (necesaria para buscar y resolver vídeos) |
 | `SEED_USERNAME` | Usuario inicial que crea `npm run db:seed` |
 | `SEED_PASSWORD` | Contraseña del usuario inicial |
+| `SEED_ROLE` | Rol del usuario inicial: `admin`, `mod` o `streamer`. Por defecto `admin` |
 
 ### Obtener la YOUTUBE_API_KEY
 

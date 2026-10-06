@@ -17,6 +17,34 @@ export interface SessionUser {
   role: string
 }
 
+/**
+ * Roles:
+ * - admin:    panel, reproductor y gestión de usuarios
+ * - mod:      panel y reproductor
+ * - streamer: solo el reproductor
+ *
+ * El rol viaja dentro del JWT, por eso vive aquí y no en lib/auth: el proxy
+ * necesita comprobarlo sin arrastrar Prisma.
+ */
+export const ROLES = ["admin", "mod", "streamer"] as const
+export type Role = (typeof ROLES)[number]
+
+export const PANEL_ROLES: readonly Role[] = ["admin", "mod"]
+export const ADMIN_ROLES: readonly Role[] = ["admin"]
+export const PLAYER_ROLES: readonly Role[] = ["admin", "mod", "streamer"]
+
+/** Un rol desconocido se trata como el más restrictivo. */
+export function hasRole(
+  session: SessionUser | null,
+  allowed: readonly Role[]
+): boolean {
+  if (!session) return false
+  const role = ROLES.includes(session.role as Role)
+    ? (session.role as Role)
+    : "streamer"
+  return allowed.includes(role)
+}
+
 export function getSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET
   if (!secret) {

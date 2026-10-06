@@ -43,7 +43,7 @@ function LoginFormInner() {
   }
 
   return (
-    <Card className="w-full max-w-sm shadow-xl backdrop-blur-sm">
+    <Card className="w-full max-w-sm shadow-xl backdrop-blur-sm border-2 border-border/60">
       <CardHeader className="text-center">
         <div className="mb-2 flex justify-center">
           <Flower2 className="h-10 w-10 text-primary" />

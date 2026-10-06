@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs"
 const prisma = new PrismaClient()
 
 const MIN_PASSWORD_LENGTH = 8
+const ROLES = ["admin", "mod", "streamer"] as const
+type Role = (typeof ROLES)[number]
 
 async function main() {
   const username = process.env.SEED_USERNAME?.trim()
@@ -22,6 +24,14 @@ async function main() {
     process.exit(1)
   }
 
+  // Sin SEED_ROLE se respeta el que ya tiene el usuario; si es nuevo y no se
+  // dice nada, se crea como admin, porque es quien podrá entrar en /users.
+  const requestedRole = process.env.SEED_ROLE?.trim()
+  if (requestedRole && !ROLES.includes(requestedRole as Role)) {
+    console.log(`Rol desconocido: "${requestedRole}". Usa: ${ROLES.join(", ")}`)
+    process.exit(1)
+  }
+
   const existing = await prisma.user.findUnique({ where: { username } })
 
   if (existing) {
@@ -34,22 +44,28 @@ async function main() {
 
     await prisma.user.update({
       where: { username },
-      data: { password: await bcrypt.hash(password, 10) },
+      data: {
+        password: await bcrypt.hash(password, 10),
+        ...(requestedRole ? { role: requestedRole as Role } : {}),
+      },
     })
 
     console.log(`Contraseña actualizada para "${username}"`)
+    if (requestedRole) console.log(`Rol actualizado a "${requestedRole}"`)
     return
   }
+
+  const role: Role = (requestedRole as Role) ?? "admin"
 
   await prisma.user.create({
     data: {
       username,
       password: await bcrypt.hash(password, 10),
-      role: "mod",
+      role,
     },
   })
 
-  console.log(`Usuario creado: ${username}`)
+  console.log(`Usuario creado: ${username} (rol: ${role})`)
 }
 
 main()

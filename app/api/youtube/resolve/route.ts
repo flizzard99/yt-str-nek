@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { extractYoutubeId, getVideoDetails } from "@/lib/youtube"
 
 const bodySchema = z.object({ url: z.string().trim().min(1) })
 
 /** Resuelve un enlace de YouTube a los datos del vídeo, sin guardarlo en la cola. */
 export async function POST(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) {

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { ListMusic, Loader2, LogOut, Play, SkipForward, Radio, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +16,13 @@ import { useQueue } from "@/hooks/use-queue"
 import { useQueueSync } from "@/hooks/use-queue-sync"
 import { MAX_QUEUE, type YoutubeResult } from "@/types"
 
-export function ModDashboard({ username }: { username: string }) {
+export function ModDashboard({
+  username,
+  canManageUsers,
+}: {
+  username: string
+  canManageUsers: boolean
+}) {
   const router = useRouter()
   const {
     queue,
@@ -32,6 +39,21 @@ export function ModDashboard({ username }: { username: string }) {
 
   const [preloaded, setPreloaded] = useState<YoutubeResult | null>(null)
   const [advancing, setAdvancing] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
+
+  async function clearHistory() {
+    setClearingHistory(true)
+    try {
+      const res = await fetch("/api/history", { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast.success("Historial borrado")
+      await refresh()
+    } catch {
+      toast.error("No se pudo borrar el historial")
+    } finally {
+      setClearingHistory(false)
+    }
+  }
 
   useQueueSync(refresh)
 
@@ -53,13 +75,15 @@ export function ModDashboard({ username }: { username: string }) {
               <Radio />
               <span className="hidden sm:inline">Reproductor</span>
             </a>
-            <Link
-              href="/users"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-            >
-              <Users />
-              <span className="hidden sm:inline">Usuarios</span>
-            </Link>
+            {canManageUsers && (
+              <Link
+                href="/users"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                <Users />
+                <span className="hidden sm:inline">Usuarios</span>
+              </Link>
+            )}
             <ThemeToggle />
             <Button
               variant="ghost"
@@ -77,7 +101,7 @@ export function ModDashboard({ username }: { username: string }) {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.1fr_1fr]">
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.1fr_1fr] border-x border-border/60 shadow-[0_1px_1px_rgba(0,0,0,0.01)]">
         <section className="flex flex-col gap-6">
           <YoutubeSearch
             onAdd={addSong}
@@ -129,7 +153,13 @@ export function ModDashboard({ username }: { username: string }) {
             </CardContent>
           </Card>
 
-          <HistoryList history={history} onReAdd={reAddFromHistory} disabled={queueFull} />
+          <HistoryList
+            history={history}
+            onReAdd={reAddFromHistory}
+            onClear={clearHistory}
+            clearing={clearingHistory}
+            disabled={queueFull}
+          />
         </section>
       </main>
     </div>

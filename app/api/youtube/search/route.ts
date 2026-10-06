@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
+import { requireRoles, PANEL_ROLES } from "@/lib/authorize"
 import { searchYoutube } from "@/lib/youtube"
 
 export async function GET(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(PANEL_ROLES)
+  if (guard instanceof NextResponse) return guard
 
   const { searchParams } = new URL(req.url)
   const q = searchParams.get("q")

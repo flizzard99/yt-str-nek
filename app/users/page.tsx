@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { getSession } from "@/lib/auth"
+import { getSession, hasRole, ADMIN_ROLES } from "@/lib/auth"
 import { buttonVariants } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { UsersManager } from "@/components/users/users-manager"
@@ -13,6 +13,7 @@ export const metadata = {
 export default async function UsersPage() {
   const session = await getSession()
   if (!session) redirect("/login?callbackUrl=/users")
+  if (!hasRole(session, ADMIN_ROLES)) redirect("/mod")
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl space-y-6 p-6">

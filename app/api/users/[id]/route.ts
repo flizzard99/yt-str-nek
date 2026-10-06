@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { getSession } from "@/lib/auth"
+import { requireRoles, ADMIN_ROLES } from "@/lib/authorize"
+import { parseRole } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
 const MIN_PASSWORD = 8
 
 type Params = { params: Promise<{ id: string }> }
 
-/** Cambia el nombre de usuario o la contraseña. */
+/** Cambia el nombre de usuario, la contraseña o el rol. */
 export async function PATCH(req: Request, { params }: Params) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(ADMIN_ROLES)
+  if (guard instanceof NextResponse) return guard
+  const { session } = guard
 
   const { id } = await params
   const body = await req.json().catch(() => ({}))
@@ -20,12 +22,33 @@ export async function PATCH(req: Request, { params }: Params) {
     typeof body.password === "string" && body.password.length > 0
       ? body.password
       : undefined
+  const newRole = parseRole(body.role)
 
-  if (newUsername === undefined && newPassword === undefined) {
-    return NextResponse.json(
-      { error: "No hay nada que cambiar" },
-      { status: 400 }
-    )
+  // Primero el rol: si viene uno explícito y no existe, el error es ese, no
+// "no hay nada que cambiar".
+if (body.role !== undefined && !newRole) {
+  return NextResponse.json({ error: "Ese rol no existe" }, { status: 400 })
+  }
+
+  if (newUsername === undefined && newPassword === undefined && !newRole) {
+    return NextResponse.json({ error: "No hay nada que cambiar" }, { status: 400 })
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id } })
+  if (!existing) {
+    return NextResponse.json({ error: "Ese usuario no existe" }, { status: 404 })
+  }
+
+  // Sin esto, el último admin podría degradarse a sí mismo y nadie podría
+  // volver a entrar en /users.
+  if (existing.role === "admin" && newRole && newRole !== "admin") {
+    const admins = await prisma.user.count({ where: { role: "admin" } })
+    if (admins <= 1) {
+      return NextResponse.json(
+        { error: "No se puede quitar el único administrador" },
+        { status: 400 }
+      )
+    }
   }
 
   if (newUsername !== undefined) {
@@ -65,6 +88,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ...(newPassword !== undefined
         ? { password: await bcrypt.hash(newPassword, 10) }
         : {}),
+      ...(newRole ? { role: newRole } : {}),
     },
     select: { id: true, username: true, role: true, createdAt: true },
   })
@@ -76,8 +100,9 @@ export async function PATCH(req: Request, { params }: Params) {
 
 /** Elimina un usuario. No se puede borrar a uno mismo ni quedarse sin ninguno. */
 export async function DELETE(req: Request, { params }: Params) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+  const guard = await requireRoles(ADMIN_ROLES)
+  if (guard instanceof NextResponse) return guard
+  const { session } = guard
 
   const { id } = await params
 
@@ -99,6 +124,16 @@ export async function DELETE(req: Request, { params }: Params) {
       { error: "No se puede quedar la aplicación sin usuarios" },
       { status: 400 }
     )
+  }
+
+  if (existing.role === "admin") {
+    const admins = await prisma.user.count({ where: { role: "admin" } })
+    if (admins <= 1) {
+      return NextResponse.json(
+        { error: "No se puede eliminar el único administrador" },
+        { status: 400 }
+      )
+    }
   }
 
   // addedById tiene onDelete implícito restrictivo: primero se sueltan las

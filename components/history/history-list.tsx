@@ -9,18 +9,36 @@ import type { HistoryItem } from "@/types"
 export function HistoryList({
   history,
   onReAdd,
+  onClear,
+  clearing,
   disabled,
 }: {
   history: HistoryItem[]
   onReAdd: (item: HistoryItem) => void
+  onClear: () => void
+  clearing: boolean
   disabled: boolean
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <HistoryIcon className="h-4 w-4 text-primary" />
-          Historial
+        <CardTitle className="flex items-center justify-between gap-2 text-base">
+          <div className="flex items-center gap-2">
+            <HistoryIcon className="h-4 w-4 text-primary" />
+            Historial
+          </div>
+          {history.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onClear}
+              disabled={clearing || disabled}
+            >
+              {clearing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Borrar historial
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>

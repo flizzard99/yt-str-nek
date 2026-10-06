@@ -163,6 +163,10 @@ export function Player() {
 
     playerRef.current = new YT.Player(node, {
       videoId: song.youtubeId,
+      // El tamaño lo manda el contenedor, así el vídeo se adapta al ancho
+      // sin recalcular nada al cambiar de modo.
+      width: "100%",
+      height: "100%",
       playerVars: {
         autoplay: 1,
         playsinline: 1,
@@ -275,6 +279,7 @@ useEffect(() => {
   }
 
   const isMuted = volume === 0
+  const [showVideo, setShowVideo] = useState(false)
 
   if (loading) {
     return (
@@ -287,7 +292,7 @@ useEffect(() => {
   if (!current) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="max-w-md text-center">
+        <Card className="max-w-md text-center border-2 border-border/60">
           <CardContent className="space-y-2 py-10">
             <p className="font-heading text-lg">No hay música en la cola</p>
             <p className="text-sm text-muted-foreground">
@@ -333,7 +338,30 @@ useEffect(() => {
           </div>
 
           {/* Reproductor de YouTube oculto: el audio y el volumen los controlamos con la API */}
-          <div ref={holderRef} className="hidden" aria-hidden="true" />
+          {/*
+            En modo audio el contenedor se esconde pero NO con display:none: un
+            iframe de tamaño cero puede dejar de reproducir. Se deja de 1x1 y
+            transparente, así el audio sigue sonando.
+          */}
+          <div
+            ref={holderRef}
+            aria-hidden={!showVideo}
+            className={
+              showVideo
+                ? "aspect-video w-full overflow-hidden rounded-lg bg-black"
+                : "pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0"
+            }
+          />
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              variant={showVideo ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowVideo((v) => !v)}
+            >
+              {showVideo ? "Solo audio" : "Mostrar vídeo"}
+            </Button>
+          </div>
 
           {needsGesture && (
             <Button className="w-full" size="lg" onClick={togglePlay}>
@@ -345,7 +373,7 @@ useEffect(() => {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button size="lg" onClick={togglePlay} aria-label={isPlaying ? "Pausar" : "Reproducir"}>
               {isPlaying ? <Pause /> : <Play />}
-              {isPlaying ? "Pausa" : "Reproducir"}
+              {isPlaying ? "Pausar" : "Reproducir"}
             </Button>
             <Button
               variant="secondary"

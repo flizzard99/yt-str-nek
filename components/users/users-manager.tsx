@@ -22,17 +22,30 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type { Role } from "@/lib/session"
+
+const ROLE_LABEL: Record<Role, string> = {
+  admin: "Admin",
+  mod: "Mod",
+  streamer: "Streamer",
+}
 
 interface UserRow {
   id: string
   username: string
-  role: string
+  role: Role
   createdAt: string
   songsAdded: number
   isSelf: boolean
 }
 
-const EMPTY = { username: "", password: "" }
+const ROLES: Array<{ value: Role; label: string; hint: string }> = [
+  { value: "admin", label: "Administrador", hint: "Panel, reproductor y usuarios" },
+  { value: "mod", label: "Moderador", hint: "Panel y reproductor" },
+  { value: "streamer", label: "Streamer", hint: "Solo el reproductor" },
+]
+
+const EMPTY = { username: "", password: "", role: "mod" as Role }
 
 export function UsersManager() {
   const [users, setUsers] = useState<UserRow[] | null>(null)
@@ -91,8 +104,9 @@ export function UsersManager() {
     setBusy(true)
     try {
       // Si la contraseña queda vacía no se envía, para no cambiarla por error
-      const body: { username?: string; password?: string } = {
+      const body: { username?: string; password?: string; role?: Role } = {
         username: form.username,
+        role: form.role,
       }
       if (form.password) body.password = form.password
 
@@ -173,6 +187,9 @@ export function UsersManager() {
                           (tú)
                         </span>
                       )}
+                      <span className="ml-2 rounded border border-border/60 px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                        {ROLE_LABEL[user.role] ?? user.role}
+                      </span>
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {user.songsAdded} canción{user.songsAdded === 1 ? "" : "es"} añadida
@@ -184,7 +201,7 @@ export function UsersManager() {
                     size="sm"
                     onClick={() => {
                       setEditing(user)
-                      setForm({ username: user.username, password: "" })
+                      setForm({ username: user.username, password: "", role: user.role })
                     }}
                   >
                     <Pencil />
@@ -240,6 +257,23 @@ export function UsersManager() {
                       autoComplete="off"
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-role">Rol</Label>
+                    <select
+                      id="new-role"
+                      value={form.role}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, role: e.target.value as Role }))
+                      }
+                      className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label} — {r.hint}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="new-password">Contraseña</Label>
@@ -305,6 +339,23 @@ export function UsersManager() {
                     autoComplete="off"
                     required
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-role">Rol</Label>
+                  <select
+                    id="edit-role"
+                    value={form.role}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, role: e.target.value as Role }))
+                    }
+                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label} — {r.hint}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-password">Contraseña nueva</Label>

@@ -2,15 +2,21 @@ import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import {
+  ADMIN_ROLES,
+  PANEL_ROLES,
+  PLAYER_ROLES,
+  ROLES,
   SESSION_COOKIE,
   SESSION_MAX_AGE,
+  hasRole,
   signSessionToken,
   verifySessionToken,
+  type Role,
   type SessionUser,
 } from "@/lib/session"
 
 export { SESSION_COOKIE, verifySessionToken }
-export type { SessionUser }
+export type { SessionUser, Role }
 
 export async function createSession(user: SessionUser): Promise<void> {
   const token = await signSessionToken(user)
@@ -47,4 +53,12 @@ export async function verifyCredentials(
   if (!valid) return null
 
   return { id: user.id, username: user.username, role: user.role }
+}
+
+export { ROLES, PANEL_ROLES, ADMIN_ROLES, PLAYER_ROLES, hasRole }
+
+/** Convierte un valor en un rol válido, o null si no lo es. */
+export function parseRole(role: unknown): Role | null {
+  if (typeof role !== "string") return null
+  return ROLES.includes(role as Role) ? (role as Role) : null
 }
