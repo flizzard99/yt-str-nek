@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Flower2, Headphones, LogOut, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card"
 import { getSession, hasRole, PANEL_ROLES, PLAYER_ROLES } from "@/lib/auth"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 
 export const metadata = {
   title: "yt-str-nek",
@@ -36,6 +37,9 @@ export default async function Home() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-8 p-6">
+      <div className="flex justify-end">
+        <ThemeToggle />
+      </div>
       <div className="text-center">
         <Flower2 className="mx-auto mb-3 h-12 w-12 text-primary" />
         <h1 className="font-heading text-3xl font-semibold">yt-str-nek</h1>

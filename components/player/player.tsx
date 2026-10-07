@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { formatDuration } from "@/lib/format"
 import type { PlayerSong } from "@/app/api/player/current/route"
 import type { YTNamespace, YTPlayer, YTEventTarget } from "@/types/youtube-iframe"
@@ -65,11 +66,15 @@ function loadYouTubeApi(): Promise<YTNamespace> {
  * fuerte y el resto en un tono apagado. Se pinta en un div detrás del input,
  * porque la pista del range se deja transparente.
  */
-function BarFill({ percent }: { percent: number }) {
+interface VolumeBarFillProps {
+  percent: number
+}
+
+function VolumeBarFill({ percent }: VolumeBarFillProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted transition-all group-hover:h-1.5">
+    <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted/70 transition-all group-hover:h-1.5 group-focus-within:h-1.5">
       <div
-        className="absolute inset-y-0 left-0 rounded-full bg-primary"
+        className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-100"
         style={{ width: `${percent}%` }}
       />
     </div>
@@ -452,13 +457,15 @@ export function Player() {
 
   const hasDuration = position.total > 0
   const playedPercent = hasDuration ? (position.current / position.total) * 100 : 0
-  const bufferedPercent = hasDuration ? position.buffered * 100 : 0
+  const bufferedPercent = hasDuration
+    ? Math.max(0, Math.min(100, position.buffered * 100))
+    : 0
   const previewPercent = preview.visible ? preview.at * 100 : 0
   const isMuted = volume === 0
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-3 p-4">
-      <div className="flex justify-center">
+      <div className="flex items-center justify-between px-2">
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -466,6 +473,7 @@ export function Player() {
           <Home className="h-4 w-4" />
           Cambiar de modo
         </Link>
+        <ThemeToggle />
       </div>
 
       <Card className="gap-0 overflow-hidden border-2 border-border/60 py-0">
@@ -532,13 +540,13 @@ export function Player() {
             onMouseLeave={() => setPreview((p) => ({ ...p, visible: false }))}
           >
             {/* Relleno detrás de la pista: búfer y parte escuchada */}
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted transition-all group-hover:h-1.5">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted/70 transition-all group-hover:h-1.5 group-focus-within:h-1.5">
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-foreground/20"
+                className="absolute inset-y-0 left-0 rounded-full bg-foreground/30 transition-[width] duration-150 ease-out"
                 style={{ width: `${bufferedPercent}%` }}
               />
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-150 ease-out"
                 style={{ width: `${playedPercent}%` }}
               />
             </div>
@@ -561,14 +569,17 @@ export function Player() {
               // mano o la barra se queda congelada.
               onKeyUp={(e) => onScrubEnd(Number(e.currentTarget.value))}
               onBlur={(e) => onScrubEnd(Number(e.currentTarget.value))}
-              aria-label="Posición de la canción"
-              aria-valuetext={`${formatDuration(Math.round(position.current))} de ${formatDuration(
+              aria-label="Progreso de la canción"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(1, Math.round(position.total))}
+              aria-valuenow={Math.round(position.current)}
+              aria-valuetext={`${formatDuration(Math.round(position.current))} / ${formatDuration(
                 hasDuration ? Math.round(position.total) : null
               )}`}
             />
             {preview.visible && hasDuration && (
               <span
-                className="pointer-events-none absolute -top-6 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-xs tabular-nums text-background"
+                className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-md bg-background/95 px-2 py-0.5 text-xs font-medium tabular-nums text-foreground shadow-lg ring-1 ring-border backdrop-blur-sm"
                 style={{ left: `${previewPercent}%` }}
               >
                 {formatDuration(Math.round(preview.at * position.total))}
@@ -631,8 +642,15 @@ export function Player() {
             {isMuted ? <VolumeX /> : <Volume2 />}
           </Button>
 
-          <div className="group relative w-24">
-            <BarFill percent={volume} />
+          <div
+            className="group relative w-24"
+            onWheel={(e) => {
+              e.preventDefault()
+              const delta = e.deltaY > 0 ? -5 : 5
+              changeVolume(volume + delta)
+            }}
+          >
+            <VolumeBarFill percent={volume} />
             <input
               type="range"
               className="player-range"
@@ -642,6 +660,7 @@ export function Player() {
               value={volume}
               onChange={(e) => changeVolume(Number(e.target.value))}
               aria-label="Volumen"
+              aria-orientation="horizontal"
               aria-valuetext={`${volume}%`}
             />
           </div>

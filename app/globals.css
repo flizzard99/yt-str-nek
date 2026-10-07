@@ -152,7 +152,8 @@
     border-radius: 9999px;
     /* El relleno se pinta en divs de detrás; la pista queda transparente. */
     background: transparent;
-    transition: height 0.15s ease;
+    transition: height 0.15s ease, transform 0.15s ease;
+    will-change: height;
   }
 
   .player-range:hover::-webkit-slider-runnable-track,
@@ -163,44 +164,56 @@
   .player-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 13px;
-    height: 13px;
-    margin-top: -4.5px;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
     border-radius: 9999px;
     background: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 80%);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--background), transparent 20%),
+      0 1px 2px color-mix(in oklch, var(--foreground), transparent 70%);
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transform: scale(0.9);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    will-change: transform, opacity;
   }
 
   .player-range:hover::-webkit-slider-thumb,
-  .player-range:focus-visible::-webkit-slider-thumb {
+  .player-range:focus-visible::-webkit-slider-thumb,
+  .player-range:active::-webkit-slider-thumb {
     opacity: 1;
+    transform: scale(1);
   }
 
   .player-range::-moz-range-track {
     height: 4px;
     border-radius: 9999px;
     background: transparent;
+    transition: height 0.15s ease;
   }
 
-  .player-range:hover::-moz-range-track {
+  .player-range:hover::-moz-range-track,
+  .player-range:focus-visible::-moz-range-track {
     height: 6px;
   }
 
   .player-range::-moz-range-thumb {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
     border: none;
     border-radius: 9999px;
     background: var(--primary);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--background), transparent 20%),
+      0 1px 2px color-mix(in oklch, var(--foreground), transparent 70%);
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transform: scale(0.9);
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .player-range:hover::-moz-range-thumb,
-  .player-range:focus-visible::-moz-range-thumb {
+  .player-range:focus-visible::-moz-range-thumb,
+  .player-range:active::-moz-range-thumb {
     opacity: 1;
+    transform: scale(1);
   }
 
   .player-range:disabled {

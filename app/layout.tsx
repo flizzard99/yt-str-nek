@@ -18,6 +18,14 @@ const notoSerifJP = Noto_Serif_JP({
 export const metadata: Metadata = {
   title: "yt-str-nek",
   description: "Gestor de cola de música para moderadores",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/apple-touch-icon.png",
+  },
 }
 
 export default function RootLayout({
