@@ -20,12 +20,14 @@ export const metadata: Metadata = {
   description: "Gestor de cola de música para moderadores",
   icons: {
     icon: [
+      { url: "/favicon-512.png", sizes: "512x512" },
+      { url: "/favicon-384.png", sizes: "384x384" },
+      { url: "/favicon-256.png", sizes: "256x256" },
       { url: "/favicon.png", sizes: "192x192" },
-      { url: "/pestana.png", sizes: "512x512" },
       { url: "/favicon.ico", sizes: "any" },
     ],
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    shortcut: "/favicon-512.png",
+    apple: "/favicon-512.png",
   },
 }
 
