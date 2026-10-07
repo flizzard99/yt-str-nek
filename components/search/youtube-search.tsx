@@ -22,7 +22,7 @@ function ResultRow({
   const [adding, setAdding] = useState(false)
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-3 transition-colors hover:border-primary/40 sm:flex-row sm:items-center">
+    <li className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-3 transition-colors hover:border-primary/40 sm:flex-row sm:items-center min-w-0">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {result.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -170,7 +170,7 @@ export function YoutubeSearch({
         )}
 
         {!preloaded && !loading && results.length > 0 && (
-          <ul className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
+          <ul className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1 min-w-0">
             {results.map((r) => (
               <ResultRow key={r.youtubeId} result={r} onAdd={onAdd} disabled={disabled} />
             ))}

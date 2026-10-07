@@ -111,7 +111,7 @@ export function ModDashboard({
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.1fr_1fr] border-x border-border/60 shadow-[0_1px_1px_rgba(0,0,0,0.01)]">
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] border-x border-border/60 shadow-[0_1px_1px_rgba(0,0,0,0.01)]">
         <section className="flex flex-col gap-6">
           <YoutubeSearch
             onAdd={addSong}
