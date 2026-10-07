@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { Flower2, Headphones, LogOut, ShieldCheck } from "lucide-react"
+import Image from "next/image"
+import { Headphones, LogOut, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card"
 import { getSession, hasRole, PANEL_ROLES, PLAYER_ROLES } from "@/lib/auth"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
@@ -41,8 +42,16 @@ export default async function Home() {
         <ThemeToggle />
       </div>
       <div className="text-center">
-        <Flower2 className="mx-auto mb-3 h-12 w-12 text-primary" />
-        <h1 className="font-heading text-3xl font-semibold">yt-str-nek</h1>
+        <div className="mx-auto mb-3 flex justify-center">
+          <Image
+            src="/logo-koi.png"
+            alt="yt-str-nek"
+            width={320}
+            height={120}
+            className="h-16 w-auto"
+            priority
+          />
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {session
             ? `Hola, ${session.username}. Elige cómo quieres entrar`

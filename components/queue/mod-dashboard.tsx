@@ -65,12 +65,12 @@ export function ModDashboard({
           <div className="flex items-center gap-2">
             <Link href="/" className="flex items-center gap-1.5">
               <Image
-                src="/logo-koi.svg"
+                src="/logo-koi.png"
                 alt="yt-str-nek"
                 width={120}
                 height={32}
-                className="h-6 w-auto"
-                style={{ color: "var(--primary)" }}
+                className="h-7 w-auto"
+                priority
               />
             </Link>
             <span className="text-xs text-muted-foreground">· {username}</span>
