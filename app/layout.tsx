@@ -20,11 +20,13 @@ export const metadata: Metadata = {
   description: "Gestor de cola de música para moderadores",
   icons: {
     icon: [
+      { url: "/koi.png", sizes: "192x192" },
+      { url: "/logo-koi.png", sizes: "512x512" },
       { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/icon.svg", type: "image/svg+xml" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: "/koi.png",
+    apple: "/koi.png",
   },
 }
 

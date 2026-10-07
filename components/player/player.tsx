@@ -11,7 +11,6 @@ import {
   MonitorPlay,
   Pause,
   Play,
-  RotateCcw,
   SkipForward,
   Volume2,
   VolumeX,
@@ -619,17 +618,7 @@ export function Player() {
             <SkipForward className="fill-current" />
           </Button>
 
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            onClick={() => seekTo(position.current - 10)}
-            aria-label="Retroceder 10 segundos"
-            title="Retroceder 10 segundos"
-            disabled={!hasDuration}
-          >
-            <RotateCcw />
-            <span className="absolute -mt-0.5 text-[9px] font-semibold">10</span>
-          </Button>
+
 
           <div className="flex-1" />
 
