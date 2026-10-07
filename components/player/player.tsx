@@ -282,7 +282,18 @@ export function Player() {
               setNeedsGesture(false)
               // Solo si el volumen no está a 0: si el usuario lo silenció a
               // propósito, no se le quita el silencio.
-              if (volumeRef.current > 0) playerRef.current?.unMute()
+              if (volumeRef.current > 0) {
+                playerRef.current?.unMute()
+                // Refuerzo por posibles carreras con políticas de autoplay
+                window.setTimeout(() => {
+                  if (
+                    playerRef.current?.getPlayerState() === YT.PlayerState.PLAYING &&
+                    volumeRef.current > 0
+                  ) {
+                    playerRef.current.unMute()
+                  }
+                }, 150)
+              }
             }
             if (event.data === YT.PlayerState.PAUSED) setIsPlaying(false)
             if (event.data === YT.PlayerState.ENDED) void advanceRef.current?.()
@@ -372,6 +383,9 @@ export function Player() {
       setIsPlaying(false)
     } else {
       player.playVideo()
+      if (volumeRef.current > 0) {
+        player.unMute()
+      }
       setIsPlaying(true)
     }
   }
